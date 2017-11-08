@@ -1,0 +1,149 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "AWS CloudFormation Sample Template SQS_With_CloudWatch_Alarms: Sample template showing how to create an SQS queue with Amazon CloudWatch alarms on queue depth. **WARNING** This template creates an Amazon SQS queue and one or more Amazon CloudWatch alarms. You will be billed for the AWS resources used if you create a stack from this template.",
+  "Parameters": {
+    "AlarmEmail": {
+      "Default": "nobody@amazon.com",
+      "Description": "Email address to notify if operational problems arise",
+      "Type": "String"
+    }
+  },
+  "Resources": {
+    "Thumbnails": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "AccessControl": "PublicRead"
+      }
+    },
+    "ThumbnailRequestsDLQ": {
+      "Type": "AWS::SQS::Queue",
+      "Properties": {
+        "ReceiveMessageWaitTimeSeconds": 20,
+        "MaximumMessageSize": 262144,
+        "MessageRetentionPeriod": 345600,
+        "VisibilityTimeout": 30
+      }
+    },
+    "ThumbnailRequests": {
+      "Type": "AWS::SQS::Queue",
+      "Properties": {
+        "ReceiveMessageWaitTimeSeconds": 20,
+        "MaximumMessageSize": 262144,
+        "MessageRetentionPeriod": 345600,
+        "VisibilityTimeout": 30,
+        "RedrivePolicy": {
+          "deadLetterTargetArn": {
+            "Fn::GetAtt": [
+              "ThumbnailRequestsDLQ",
+              "Arn"
+            ]
+          },
+          "maxReceiveCount": 3
+        }
+      }
+    },
+    "ThumbnailResults": {
+      "Type": "AWS::SQS::Queue",
+      "Properties": {
+        "ReceiveMessageWaitTimeSeconds": 20,
+        "MaximumMessageSize": 262144,
+        "MessageRetentionPeriod": 345600,
+        "VisibilityTimeout": 30
+      }
+    },
+    "AlarmTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "Subscription": [
+          {
+            "Endpoint": {
+              "Ref": "AlarmEmail"
+            },
+            "Protocol": "email"
+          }
+        ]
+      }
+    },
+    "QueueDepthAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmDescription": "Alarm if queue depth grows beyond 10 messages",
+        "Namespace": "AWS/SQS",
+        "MetricName": "ApproximateNumberOfMessagesVisible",
+        "Dimensions": [
+          {
+            "Name": "QueueName",
+            "Value": {
+              "Fn::GetAtt": [
+                "ThumbnailRequests",
+                "QueueName"
+              ]
+            }
+          }
+        ],
+        "Statistic": "Sum",
+        "Period": "300",
+        "EvaluationPeriods": "1",
+        "Threshold": "10",
+        "ComparisonOperator": "GreaterThanThreshold",
+        "AlarmActions": [
+          {
+            "Ref": "AlarmTopic"
+          }
+        ],
+        "InsufficientDataActions": [
+          {
+            "Ref": "AlarmTopic"
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "SourceQueueURL": {
+      "Description": "URL of the source queue",
+      "Value": {
+        "Ref": "ThumbnailRequests"
+      }
+    },
+    "SourceQueueARN": {
+      "Description": "ARN of the source queue",
+      "Value": {
+        "Fn::GetAtt": [
+          "ThumbnailRequests",
+          "Arn"
+        ]
+      }
+    },
+    "ResultQueueURL": {
+      "Description": "URL of the result queue",
+      "Value": {
+        "Ref": "ThumbnailResults"
+      }
+    },
+    "ResultQueueARN": {
+      "Description": "ARN of the result queue",
+      "Value": {
+        "Fn::GetAtt": [
+          "ThumbnailResults",
+          "Arn"
+        ]
+      }
+    },
+    "DeadLetterQueueURL": {
+      "Description": "URL of the dead letter queue",
+      "Value": {
+        "Ref": "ThumbnailRequestsDLQ"
+      }
+    },
+    "DeadLetterQueueARN": {
+      "Description": "ARN of the dead letter queue",
+      "Value": {
+        "Fn::GetAtt": [
+          "ThumbnailRequestsDLQ",
+          "Arn"
+        ]
+      }
+    }
+  }
+}
