@@ -3,6 +3,8 @@ package aws.scaling.thumbnail;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import java.io.IOException;
+
 /*
 {
 "objectId":"12345678abcdefg",
@@ -50,5 +52,11 @@ public class ThumbnailResult {
 
     public String toJSON() throws JsonProcessingException {
         return new ObjectMapper().writeValueAsString(this);
+    }
+
+    public static ThumbnailResult fromJSON(String json)
+            throws IOException {
+        ObjectMapper objectMapper = new ObjectMapper();
+        return objectMapper.readValue(json, ThumbnailResult.class);
     }
 }

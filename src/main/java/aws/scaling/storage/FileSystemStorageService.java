@@ -1,37 +1,29 @@
 package aws.scaling.storage;
 
-import aws.scaling.thumbnail.ThumbnailRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
-import org.springframework.jms.core.JmsTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.util.FileSystemUtils;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.File;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.UUID;
 import java.util.stream.Stream;
+
+import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
 
 @Service
 public class FileSystemStorageService implements StorageService {
-    private final Path rootLocation;
+    protected final Path rootLocation;
 
     @Autowired
     public FileSystemStorageService(StorageProperties properties) {
         this.rootLocation = Paths.get(properties.getLocation());
     }
-
-    @Autowired
-    private JmsTemplate defaultJmsTemplate;
-
-    @Autowired
-    private S3Services s3Services;
 
     @Override
     public void store(MultipartFile file) {
@@ -40,13 +32,7 @@ public class FileSystemStorageService implements StorageService {
                 throw new StorageException("Failed to store empty file " + file.getOriginalFilename());
             }
             Path path = this.rootLocation.resolve(file.getOriginalFilename());
-            Files.copy(file.getInputStream(), path);
-            File f = path.toFile();
-            s3Services.upload(file.getOriginalFilename(), f);
-            ThumbnailRequest request = new ThumbnailRequest(UUID.randomUUID().toString(), file.getOriginalFilename());
-            defaultJmsTemplate.convertAndSend("thumbnail_requests",
-                    request.toJSON());
-            System.out.println("Sent the message.");
+            Files.copy(file.getInputStream(), path, REPLACE_EXISTING);
         } catch (IOException e) {
             throw new StorageException("Failed to store file " + file.getOriginalFilename(), e);
         }

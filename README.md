@@ -9,15 +9,17 @@ https://spring.io/guides/gs/uploading-files
 The latter is a complete application and works out of the box, whereas the former is just an outline of the main idea and pile of code pieces.
 
 You may find usefull the following AWS CLI commands:
-$ aws sqs create-queue --queue-name thumbnail_requests_dlq
-$ aws sqs list-queues --region "us-east-1"
-$ nano create-queue.json
-{
-  "RedrivePolicy": "{\"deadLetterTargetArn\":\"arn:aws:sqs:us-east-1:417207121721:thumbnail_requests_dlq\",\"maxReceiveCount\":\"1000\"}",
-  "MessageRetentionPeriod": "259200"
-}
-$ aws sqs create-queue --queue-name thumbnail_requests --attributes file://create-queue.json --region us-east-1
-$ aws sqs create-queue --queue-name thumbnail_results --region us-east-1
-$ aws s3api create-bucket --bucket spring-jms-experiment --region us-east-1
-$ aws s3api list-objects --bucket spring-jms-experiment --region us-east-1
-$ aws sqs purge-queue --queue-url https://queue.amazonaws.com/EXAMPLE21721/thumbnail_requests --region us-east-1
+`<p>$ aws sqs create-queue --queue-name thumbnail-requests-dlq --region us-east-1
+<p>$ aws sqs list-queues --region us-east-1
+<p>$ echo '{ "RedrivePolicy": "{\"deadLetterTargetArn\":\"arn:aws:sqs:us-east-1:%YOUR_ACCOUNT_ID%:thumbnail_requests_dlq\",\"maxReceiveCount\":\"1000\"}", "MessageRetentionPeriod": "259200" }' > create-queue.json
+<p>$ aws sqs create-queue --queue-name thumbnail-requests --attributes file://create-queue.json --region us-east-1
+<p>$ aws sqs create-queue --queue-name thumbnail-results --region us-east-1
+<p>NOTE you should choose another unique bucket name
+<p>$ aws s3api create-bucket --bucket aws-scaling-thumbnails --region us-east-1
+<p>$ aws s3api list-objects --bucket aws-scaling-thumbnails --region us-east-1
+<p>$ aws sqs purge-queue --queue-url https://queue.amazonaws.com/%YOUR_ACCOUNT_ID%/thumbnail-requests --region us-east-1
+
+Make sure your application uploaded to S3 bucket
+<p>mvn clean install
+<p>aws s3 cp target/aws-scaling-0.1.0.jar s3://source-code-bucket-aws-scaling
+

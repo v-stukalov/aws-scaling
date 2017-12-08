@@ -6,10 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 
 /*
-{
-    "objectId":"12345678abcdefg",
-    "imageUrl":"s3://mybucket/images/image1.jpg"
-}
+{"objectId":"71cb084b-0763-4001-9b71-61db0d7ab66c","imageUrl":"Screen Shot 2017-12-05 at 5.47.21 PM (2).png"}
 */
 public class ThumbnailRequest {
 

@@ -1,8 +1,8 @@
 package aws.scaling;
 
+import aws.scaling.thumbnail.ThumbnailService;
 import aws.scaling.storage.StorageFileNotFoundException;
 import aws.scaling.storage.StorageService;
-import aws.scaling.thumbnail.ThumbnailService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
@@ -14,7 +14,6 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.method.annotation.MvcUriComponentsBuilder;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
-import java.io.IOException;
 import java.util.stream.Collectors;
 
 @Controller
@@ -55,6 +54,7 @@ class FileUploadController {
                                    RedirectAttributes redirectAttributes) {
 
         storageService.store(file);
+        thumbnailService.requestThumbnail(file.getOriginalFilename());
 
         redirectAttributes.addFlashAttribute("message",
                 "You successfully uploaded " + file.getOriginalFilename() + "!");

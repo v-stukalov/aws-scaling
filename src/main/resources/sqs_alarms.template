@@ -1,7 +1,10 @@
 {
   "AWSTemplateFormatVersion": "2010-09-09",
-  "Description": "AWS CloudFormation Sample Template SQS_With_CloudWatch_Alarms: Sample template showing how to create an SQS queue with Amazon CloudWatch alarms on queue depth. **WARNING** This template creates an Amazon SQS queue and one or more Amazon CloudWatch alarms. You will be billed for the AWS resources used if you create a stack from this template.",
+  "Description": "AWS CloudFormation sample template shows how to create an SQS Queue with Amazon CloudWatch Alarms on Queue Depth. **WARNING** This template creates an Amazon SQS Queue and one or more Amazon CloudWatch alarms. You will be billed for the AWS resources used if you create a stack from this template.",
   "Parameters": {
+    "SourceCodeBucket": {
+      "Type": "String"
+    },
     "AlarmEmail": {
       "Default": "nobody@amazon.com",
       "Description": "Email address to notify if operational problems arise",
@@ -9,6 +12,116 @@
     }
   },
   "Resources": {
+    "RootRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": [
+                  "ec2.amazonaws.com"
+                ]
+              },
+              "Action": [
+                "sts:AssumeRole"
+              ]
+            }
+          ]
+        },
+        "Path": "/",
+        "Policies": [
+          {
+            "PolicyName": "root",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:Get*",
+                    "s3:List*"
+                  ],
+                  "Resource": {
+                    "Fn::Join": [
+                      "",
+                      [
+                        "arn:aws:s3:::",
+                        {
+                          "Ref": "SourceCodeBucket"
+                        },
+                        "/*"
+                      ]
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "RootInstanceProfile": {
+      "Type": "AWS::IAM::InstanceProfile",
+      "Properties": {
+        "Path": "/",
+        "Roles": [
+          {
+            "Ref": "RootRole"
+          }
+        ]
+      }
+    },
+    "Ec2Instance": {
+      "Type": "AWS::EC2::Instance",
+      "Properties": {
+        "ImageId": "ami-6057e21a",
+        "InstanceType": "t2.micro",
+        "KeyName": "sample",
+        "IamInstanceProfile": {
+          "Ref": "RootInstanceProfile"
+        },
+        "UserData": {
+          "Fn::Base64": {
+            "Fn::Join": [
+              "",
+              [
+                "#!/bin/bash -ex\n",
+                "exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1\n",
+                "set -o verbose\n",
+                "yum -y update\n",
+                "yum -y install java-1.8.0\n",
+                "yum -y remove java-1.7.0-openjdk\n",
+                "mkdir /root/.aws\n",
+                "aws s3 cp s3://source-code-bucket-aws-scaling/credentials /root/.aws/credentials\n",
+                "aws s3 cp s3://source-code-bucket-aws-scaling/aws-scaling-0.1.0.jar aws-scaling-0.1.0.jar\n",
+                "nohup java -jar aws-scaling-0.1.0.jar --thumbnail.requests.queue=",
+                {
+                  "Fn::GetAtt": [
+                    "ThumbnailRequests",
+                    "QueueName"
+                  ]
+                },
+                " --thumbnail.results.queue=",
+                {
+                  "Fn::GetAtt": [
+                    "ThumbnailResults",
+                    "QueueName"
+                  ]
+                },
+                " --thumbnails.bucket=",
+                {
+                  "Ref": "Thumbnails"
+                },
+                " --spring.profiles.active=processor > aws_scaling.log"
+              ]
+            ]
+          }
+        }
+      }
+    },
     "Thumbnails": {
       "Type": "AWS::S3::Bucket",
       "Properties": {

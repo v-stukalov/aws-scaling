@@ -1,0 +1,872 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Amazon SQS sample Spring Boot application which produces thumbnails from uploaded images. Template creates two load-balanced and auto-scaled on CPU utilization groups of instances. Notifications will be sent to the operator email address on scaling events. **WARNING** This template creates one or more Amazon EC2 instances and an Amazon Relational Database Service database instance. You will be billed for the AWS resources used if you create a stack from this template.",
+  "Parameters": {
+    "KeyName": {
+      "Type": "String",
+      "Description": "Name of an existing EC2 KeyPair to enable SSH access to the web server"
+    },
+    "InstanceType": {
+      "Default": "t2.micro",
+      "Type": "String",
+      "Description": "Type of EC2 instance for web server"
+    },
+    "OperatorEmail": {
+      "Default": "nobody@amazon.com",
+      "Description": "Email address to notify if there are any operational issues",
+      "Type": "String"
+    },
+    "WebServerPort": {
+      "Default": "8080",
+      "Type": "Number",
+      "MinValue": "1",
+      "MaxValue": "65535",
+      "Description": "TCP/IP port for the web server"
+    },
+    "SourceCodeBucket": {
+      "Type": "String"
+    },
+    "AvailabilityZones": {
+      "Description": "AZ(s) to deploy in to",
+      "Type": "CommaDelimitedList",
+      "Default": "us-east-1a,us-east-1b"
+    }
+  },
+  "Resources": {
+    "ElasticLoadBalancer": {
+      "Type": "AWS::ElasticLoadBalancing::LoadBalancer",
+      "Properties": {
+        "Listeners": [
+          {
+            "InstancePort": {
+              "Ref": "WebServerPort"
+            },
+            "PolicyNames": [
+              "p1"
+            ],
+            "Protocol": "HTTP",
+            "LoadBalancerPort": "80"
+          }
+        ],
+        "HealthCheck": {
+          "HealthyThreshold": "2",
+          "Interval": "10",
+          "Timeout": "5",
+          "UnhealthyThreshold": "5",
+          "Target": {
+            "Fn::Join": [
+              "",
+              [
+                "HTTP:",
+                {
+                  "Ref": "WebServerPort"
+                },
+                "/"
+              ]
+            ]
+          }
+        },
+        "AvailabilityZones": {
+          "Ref": "AvailabilityZones"
+        },
+        "ConnectionDrainingPolicy": {
+          "Enabled": "false",
+          "Timeout": "300"
+        },
+        "ConnectionSettings": {
+          "IdleTimeout": "60"
+        },
+        "LBCookieStickinessPolicy": [
+          {
+            "PolicyName": "p1",
+            "CookieExpirationPeriod": "30"
+          }
+        ]
+      }
+    },
+    "AppServerGroup": {
+      "Type": "AWS::AutoScaling::AutoScalingGroup",
+      "Properties": {
+        "AvailabilityZones": {
+          "Ref": "AvailabilityZones"
+        },
+        "Cooldown": "300",
+        "DesiredCapacity": "1",
+        "HealthCheckGracePeriod": "0",
+        "HealthCheckType": "EC2",
+        "MaxSize": "3",
+        "MinSize": "1",
+        "NotificationConfigurations": [
+          {
+            "TopicARN": {
+              "Ref": "ScalingOutAlarmTopic"
+            },
+            "NotificationTypes": [
+              "autoscaling:EC2_INSTANCE_LAUNCH",
+              "autoscaling:EC2_INSTANCE_LAUNCH_ERROR"
+            ]
+          },
+          {
+            "TopicARN": {
+              "Ref": "ScalingInAlarmTopic"
+            },
+            "NotificationTypes": [
+              "autoscaling:EC2_INSTANCE_TERMINATE",
+              "autoscaling:EC2_INSTANCE_TERMINATE_ERROR"
+            ]
+          }
+        ],
+        "LaunchConfigurationName": {
+          "Ref": "AppLaunchConfig"
+        },
+        "TerminationPolicies": [
+          "ClosestToNextInstanceHour"
+        ]
+      }
+    },
+    "WebServerGroup": {
+      "Type": "AWS::AutoScaling::AutoScalingGroup",
+      "Properties": {
+        "AvailabilityZones": {
+          "Ref": "AvailabilityZones"
+        },
+        "Cooldown": "300",
+        "DesiredCapacity": "1",
+        "HealthCheckGracePeriod": "0",
+        "HealthCheckType": "EC2",
+        "MaxSize": "3",
+        "MinSize": "1",
+        "NotificationConfigurations": [
+          {
+            "TopicARN": {
+              "Ref": "ScalingOutAlarmTopic"
+            },
+            "NotificationTypes": [
+              "autoscaling:EC2_INSTANCE_LAUNCH",
+              "autoscaling:EC2_INSTANCE_LAUNCH_ERROR"
+            ]
+          },
+          {
+            "TopicARN": {
+              "Ref": "ScalingInAlarmTopic"
+            },
+            "NotificationTypes": [
+              "autoscaling:EC2_INSTANCE_TERMINATE",
+              "autoscaling:EC2_INSTANCE_TERMINATE_ERROR"
+            ]
+          }
+        ],
+        "LaunchConfigurationName": {
+          "Ref": "WebLaunchConfig"
+        },
+        "LoadBalancerNames": [
+          {
+            "Ref": "ElasticLoadBalancer"
+          }
+        ],
+        "TerminationPolicies": [
+          "ClosestToNextInstanceHour"
+        ]
+      }
+    },
+    "RootRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": [
+                  "ec2.amazonaws.com"
+                ]
+              },
+              "Action": [
+                "sts:AssumeRole"
+              ]
+            }
+          ]
+        },
+        "Path": "/",
+        "Policies": [
+          {
+            "PolicyName": "root",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:Get*",
+                    "s3:List*"
+                  ],
+                  "Resource": {
+                    "Fn::Join": [
+                      "",
+                      [
+                        "arn:aws:s3:::",
+                        {
+                          "Ref": "SourceCodeBucket"
+                        },
+                        "/*"
+                      ]
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "RootInstanceProfile": {
+      "Type": "AWS::IAM::InstanceProfile",
+      "Properties": {
+        "Path": "/",
+        "Roles": [
+          {
+            "Ref": "RootRole"
+          }
+        ]
+      }
+    },
+    "WebLaunchConfig": {
+      "Properties": {
+        "SecurityGroups": [
+          {
+            "Ref": "EC2SecurityGroup"
+          }
+        ],
+        "ImageId": {
+          "Fn::FindInMap": [
+            "AWSRegionArch2AMI",
+            {
+              "Ref": "AWS::Region"
+            },
+            {
+              "Fn::FindInMap": [
+                "AWSInstanceType2Arch",
+                {
+                  "Ref": "InstanceType"
+                },
+                "Arch"
+              ]
+            }
+          ]
+        },
+        "IamInstanceProfile": {
+          "Ref": "RootInstanceProfile"
+        },
+        "UserData": {
+          "Fn::Base64": {
+            "Fn::Join": [
+              "",
+              [
+                "#!/bin/bash -ex\n",
+                "exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1\n",
+                "set -o verbose\n",
+                "yum -y update\n",
+                "yum -y install java-1.8.0\n",
+                "yum -y remove java-1.7.0-openjdk\n",
+                "mkdir /root/.aws\n",
+                "aws s3 cp s3://",
+                {
+                  "Ref": "SourceCodeBucket"
+                },
+                "/credentials /root/.aws/credentials\n",
+                "aws s3 cp s3://",
+                {
+                  "Ref": "SourceCodeBucket"
+                },
+                "/aws-scaling-0.1.0.jar aws-scaling-0.1.0.jar\n",
+                "nohup java -jar aws-scaling-0.1.0.jar --thumbnail.requests.queue=",
+                {
+                  "Fn::GetAtt": [
+                    "ThumbnailRequests",
+                    "QueueName"
+                  ]
+                },
+                " --thumbnail.results.queue=",
+                {
+                  "Fn::GetAtt": [
+                    "ThumbnailResults",
+                    "QueueName"
+                  ]
+                },
+                " --thumbnails.bucket=",
+                {
+                  "Ref": "Thumbnails"
+                },
+                " --spring.profiles.active=creator > aws_scaling.log"
+              ]
+            ]
+          }
+        },
+        "KeyName": {
+          "Ref": "KeyName"
+        },
+        "InstanceType": {
+          "Ref": "InstanceType"
+        }
+      },
+      "Type": "AWS::AutoScaling::LaunchConfiguration"
+    },
+    "AppLaunchConfig": {
+      "Properties": {
+        "SecurityGroups": [
+          {
+            "Ref": "EC2SecurityGroup"
+          }
+        ],
+        "ImageId": {
+          "Fn::FindInMap": [
+            "AWSRegionArch2AMI",
+            {
+              "Ref": "AWS::Region"
+            },
+            {
+              "Fn::FindInMap": [
+                "AWSInstanceType2Arch",
+                {
+                  "Ref": "InstanceType"
+                },
+                "Arch"
+              ]
+            }
+          ]
+        },
+        "IamInstanceProfile": {
+          "Ref": "RootInstanceProfile"
+        },
+        "UserData": {
+          "Fn::Base64": {
+            "Fn::Join": [
+              "",
+              [
+                "#!/bin/bash -ex\n",
+                "exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1\n",
+                "set -o verbose\n",
+                "yum -y update\n",
+                "yum -y install java-1.8.0\n",
+                "yum -y remove java-1.7.0-openjdk\n",
+                "mkdir /root/.aws\n",
+                "aws s3 cp s3://",
+                {
+                  "Ref": "SourceCodeBucket"
+                },
+                "/credentials /root/.aws/credentials\n",
+                "aws s3 cp s3://",
+                {
+                  "Ref": "SourceCodeBucket"
+                },
+                "/aws-scaling-0.1.0.jar aws-scaling-0.1.0.jar\n",
+                "nohup java -jar aws-scaling-0.1.0.jar --thumbnail.requests.queue=",
+                {
+                  "Fn::GetAtt": [
+                    "ThumbnailRequests",
+                    "QueueName"
+                  ]
+                },
+                " --thumbnail.results.queue=",
+                {
+                  "Fn::GetAtt": [
+                    "ThumbnailResults",
+                    "QueueName"
+                  ]
+                },
+                " --thumbnails.bucket=",
+                {
+                  "Ref": "Thumbnails"
+                },
+                " --spring.profiles.active=processor > aws_scaling.log"
+              ]
+            ]
+          }
+        },
+        "KeyName": {
+          "Ref": "KeyName"
+        },
+        "InstanceType": {
+          "Ref": "InstanceType"
+        }
+      },
+      "Type": "AWS::AutoScaling::LaunchConfiguration"
+    },
+    "Thumbnails": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "AccessControl": "Private",
+        "VersioningConfiguration": {
+          "Status": "Suspended"
+        }
+      }
+    },
+    "ThumbnailRequestsDLQ": {
+      "Type": "AWS::SQS::Queue",
+      "Properties": {
+        "DelaySeconds": "0",
+        "MaximumMessageSize": "262144",
+        "MessageRetentionPeriod": "345600",
+        "ReceiveMessageWaitTimeSeconds": "0",
+        "VisibilityTimeout": "30"
+      }
+    },
+    "ThumbnailRequests": {
+      "Type": "AWS::SQS::Queue",
+      "Properties": {
+        "DelaySeconds": "0",
+        "MaximumMessageSize": "262144",
+        "MessageRetentionPeriod": "259200",
+        "ReceiveMessageWaitTimeSeconds": "0",
+        "VisibilityTimeout": "30",
+        "RedrivePolicy": {
+          "maxReceiveCount": 1000,
+          "deadLetterTargetArn": {
+            "Fn::GetAtt": [
+              "ThumbnailRequestsDLQ",
+              "Arn"
+            ]
+          }
+        }
+      }
+    },
+    "ThumbnailResults": {
+      "Type": "AWS::SQS::Queue",
+      "Properties": {
+        "DelaySeconds": "0",
+        "MaximumMessageSize": "262144",
+        "MessageRetentionPeriod": "345600",
+        "ReceiveMessageWaitTimeSeconds": "0",
+        "VisibilityTimeout": "30"
+      }
+    },
+    "ScalingOutAlarmTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "DisplayName": "autoscaling-out-alarm",
+        "Subscription": [
+          {
+            "Endpoint": {
+              "Ref": "OperatorEmail"
+            },
+            "Protocol": "email"
+          }
+        ]
+      }
+    },
+    "ScalingInAlarmTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "DisplayName": "autoscaling-in-alarm",
+        "Subscription": [
+          {
+            "Endpoint": {
+              "Ref": "OperatorEmail"
+            },
+            "Protocol": "email"
+          }
+        ]
+      }
+    },
+    "EC2SecurityGroup": {
+      "Properties": {
+        "SecurityGroupIngress": [
+          {
+            "FromPort": "22",
+            "CidrIp": "0.0.0.0/0",
+            "ToPort": "22",
+            "IpProtocol": "tcp"
+          },
+          {
+            "FromPort": {
+              "Ref": "WebServerPort"
+            },
+            "CidrIp": "0.0.0.0/0",
+            "ToPort": {
+              "Ref": "WebServerPort"
+            },
+            "IpProtocol": "tcp"
+          }
+        ],
+        "GroupDescription": "HTTP and SSH access"
+      },
+      "Type": "AWS::EC2::SecurityGroup"
+    },
+    "AppServerGroupScaleOutPolicy": {
+      "Type": "AWS::AutoScaling::ScalingPolicy",
+      "Properties": {
+        "AdjustmentType": "ChangeInCapacity",
+        "PolicyType": "StepScaling",
+        "StepAdjustments": [
+          {
+            "ScalingAdjustment": 1,
+            "MetricIntervalUpperBound": 0.0
+          }
+        ],
+        "AutoScalingGroupName": {
+          "Ref": "AppServerGroup"
+        }
+      }
+    },
+    "AppServerGroupScaleInPolicy": {
+      "Type": "AWS::AutoScaling::ScalingPolicy",
+      "Properties": {
+        "AdjustmentType": "ChangeInCapacity",
+        "PolicyType": "StepScaling",
+        "StepAdjustments": [
+          {
+            "ScalingAdjustment": -1,
+            "MetricIntervalLowerBound": 0.0
+          }
+        ],
+        "AutoScalingGroupName": {
+          "Ref": "AppServerGroup"
+        }
+      }
+    },
+    "WebServerGroupScaleInPolicy": {
+      "Type": "AWS::AutoScaling::ScalingPolicy",
+      "Properties": {
+        "AdjustmentType": "ChangeInCapacity",
+        "PolicyType": "StepScaling",
+        "StepAdjustments": [
+          {
+            "ScalingAdjustment": -1,
+            "MetricIntervalUpperBound": 0.0
+          }
+        ],
+        "AutoScalingGroupName": {
+          "Ref": "WebServerGroup"
+        }
+      }
+    },
+    "WebServerGroupScaleOutPolicy": {
+      "Type": "AWS::AutoScaling::ScalingPolicy",
+      "Properties": {
+        "AdjustmentType": "ChangeInCapacity",
+        "PolicyType": "StepScaling",
+        "StepAdjustments": [
+          {
+            "ScalingAdjustment": 1,
+            "MetricIntervalLowerBound": 0.0
+          }
+        ],
+        "AutoScalingGroupName": {
+          "Ref": "WebServerGroup"
+        }
+      }
+    },
+    "WebServerGroupHighCPUAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "ActionsEnabled": "true",
+        "AlarmDescription": "Alarm if CPU too high or metric disappears indicating instance is down",
+        "ComparisonOperator": "GreaterThanThreshold",
+        "EvaluationPeriods": "1",
+        "MetricName": "CPUUtilization",
+        "Namespace": "AWS/EC2",
+        "Period": "60",
+        "Statistic": "Average",
+        "Threshold": "70.0",
+        "AlarmActions": [
+          {
+            "Ref": "WebServerGroupScaleOutPolicy"
+          }
+        ],
+        "Dimensions": [
+          {
+            "Name": "AutoScalingGroupName",
+            "Value": {
+              "Ref": "WebServerGroup"
+            }
+          }
+        ]
+      }
+    },
+    "AppServerGroupHighCPUAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "ActionsEnabled": "true",
+        "AlarmDescription": "Alarm if CPU too high or metric disappears indicating instance is down",
+        "ComparisonOperator": "GreaterThanThreshold",
+        "EvaluationPeriods": "1",
+        "MetricName": "CPUUtilization",
+        "Namespace": "AWS/EC2",
+        "Period": "60",
+        "Statistic": "Average",
+        "Threshold": "70.0",
+        "AlarmActions": [
+          {
+            "Ref": "AppServerGroupScaleOutPolicy"
+          }
+        ],
+        "Dimensions": [
+          {
+            "Name": "AutoScalingGroupName",
+            "Value": {
+              "Ref": "AppServerGroup"
+            }
+          }
+        ]
+      }
+    },
+    "AppServerGroupLowCPUAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "EvaluationPeriods": "1",
+        "Statistic": "Average",
+        "Threshold": "10",
+        "AlarmDescription": "Alarm if CPU too low",
+        "Period": "60",
+        "AlarmActions": [
+          {
+            "Ref": "AppServerGroupScaleInPolicy"
+          }
+        ],
+        "Namespace": "AWS/EC2",
+        "Dimensions": [
+          {
+            "Name": "AutoScalingGroupName",
+            "Value": {
+              "Ref": "AppServerGroup"
+            }
+          }
+        ],
+        "ComparisonOperator": "LessThanThreshold",
+        "MetricName": "CPUUtilization"
+      }
+    },
+    "WebServerGroupLowCPUAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "EvaluationPeriods": "1",
+        "Statistic": "Average",
+        "Threshold": "10",
+        "AlarmDescription": "Alarm if CPU too low",
+        "Period": "60",
+        "AlarmActions": [
+          {
+            "Ref": "WebServerGroupScaleInPolicy"
+          }
+        ],
+        "Namespace": "AWS/EC2",
+        "Dimensions": [
+          {
+            "Name": "AutoScalingGroupName",
+            "Value": {
+              "Ref": "WebServerGroup"
+            }
+          }
+        ],
+        "ComparisonOperator": "LessThanThreshold",
+        "MetricName": "CPUUtilization"
+      }
+    },
+    "AlarmTopic": {
+      "Properties": {
+        "Subscription": [
+          {
+            "Endpoint": {
+              "Ref": "OperatorEmail"
+            },
+            "Protocol": "email"
+          }
+        ]
+      },
+      "Type": "AWS::SNS::Topic"
+    },
+    "RequestLatencyAlarmHigh": {
+      "Properties": {
+        "EvaluationPeriods": "1",
+        "Statistic": "Average",
+        "Threshold": "1",
+        "AlarmDescription": "Alarm if there aren't any requests coming through",
+        "Period": "300",
+        "AlarmActions": [
+          {
+            "Ref": "AlarmTopic"
+          }
+        ],
+        "Namespace": "AWS/ELB",
+        "InsufficientDataActions": [
+          {
+            "Ref": "AlarmTopic"
+          }
+        ],
+        "Dimensions": [
+          {
+            "Name": "LoadBalancerName",
+            "Value": {
+              "Ref": "ElasticLoadBalancer"
+            }
+          }
+        ],
+        "ComparisonOperator": "GreaterThanThreshold",
+        "MetricName": "Latency"
+      },
+      "Type": "AWS::CloudWatch::Alarm"
+    },
+    "TooManyUnhealthyHostsAlarm": {
+      "Properties": {
+        "EvaluationPeriods": "1",
+        "Statistic": "Average",
+        "Threshold": "0",
+        "AlarmDescription": "Alarm if there are too many unhealthy hosts.",
+        "Period": "300",
+        "AlarmActions": [
+          {
+            "Ref": "AlarmTopic"
+          }
+        ],
+        "Namespace": "AWS/ELB",
+        "InsufficientDataActions": [
+          {
+            "Ref": "AlarmTopic"
+          }
+        ],
+        "Dimensions": [
+          {
+            "Name": "LoadBalancerName",
+            "Value": {
+              "Ref": "ElasticLoadBalancer"
+            }
+          }
+        ],
+        "ComparisonOperator": "GreaterThanThreshold",
+        "MetricName": "UnHealthyHostCount"
+      },
+      "Type": "AWS::CloudWatch::Alarm"
+    },
+    "QueueDepthAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmDescription": "Alarm if queue depth grows beyond 10 messages",
+        "Namespace": "AWS/SQS",
+        "MetricName": "ApproximateNumberOfMessagesVisible",
+        "Dimensions": [
+          {
+            "Name": "QueueName",
+            "Value": {
+              "Fn::GetAtt": [
+                "ThumbnailRequests",
+                "QueueName"
+              ]
+            }
+          }
+        ],
+        "Statistic": "Sum",
+        "Period": "300",
+        "EvaluationPeriods": "1",
+        "Threshold": "10",
+        "ComparisonOperator": "GreaterThanThreshold",
+        "AlarmActions": [
+          {
+            "Ref": "AlarmTopic"
+          }
+        ],
+        "InsufficientDataActions": [
+          {
+            "Ref": "AlarmTopic"
+          }
+        ]
+      }
+    }
+  },
+  "Mappings": {
+    "AWSInstanceType2Arch": {
+      "t1.micro": {
+        "Arch": "64"
+      },
+      "t2.micro": {
+        "Arch": "64"
+      },
+      "m1.small": {
+        "Arch": "32"
+      },
+      "m1.large": {
+        "Arch": "64"
+      },
+      "m1.xlarge": {
+        "Arch": "64"
+      },
+      "m2.xlarge": {
+        "Arch": "64"
+      },
+      "m2.2xlarge": {
+        "Arch": "64"
+      },
+      "m2.4xlarge": {
+        "Arch": "64"
+      },
+      "c1.medium": {
+        "Arch": "32"
+      },
+      "c1.xlarge": {
+        "Arch": "64"
+      },
+      "cc1.4xlarge": {
+        "Arch": "64"
+      }
+    },
+    "AWSRegionArch2AMI": {
+      "us-east-1": {
+        "32": "ami-c813e0a1",
+        "64": "ami-6057e21a"
+      },
+      "us-west-1": {
+        "32": "ami-09c7974c",
+        "64": "ami-0bc7974e"
+      },
+      "eu-west-1": {
+        "32": "ami-6bc2f61f",
+        "64": "ami-6fc2f61b"
+      },
+      "ap-southeast-1": {
+        "32": "ami-70f28c22",
+        "64": "ami-72f28c20"
+      },
+      "ap-northeast-1": {
+        "32": "ami-ac03a8ad",
+        "64": "ami-b003a8b1"
+      }
+    },
+    "AWSRegionCapabilities": {
+      "us-east-1": {
+        "RDSMultiAZ": "true"
+      },
+      "us-west-1": {
+        "RDSMultiAZ": "true"
+      },
+      "eu-west-1": {
+        "RDSMultiAZ": "true"
+      },
+      "ap-southeast-1": {
+        "RDSMultiAZ": "true"
+      },
+      "ap-northeast-1": {
+        "RDSMultiAZ": "true"
+      }
+    }
+  },
+  "Outputs": {
+    "URL": {
+      "Value": {
+        "Fn::Join": [
+          "",
+          [
+            "http://",
+            {
+              "Fn::GetAtt": [
+                "ElasticLoadBalancer",
+                "DNSName"
+              ]
+            },
+            "/"
+          ]
+        ]
+      },
+      "Description": "URL of the website"
+    }
+  }
+}
