@@ -1,0 +1,3270 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Deploy the OCM infrastructrue",
+  "Mappings": {
+    "CloudwatchLogsRegions": {
+      "ap-northeast-1": {
+        "cwlogs": "us-west-2"
+      },
+      "ap-southeast-1": {
+        "cwlogs": "us-west-2"
+      },
+      "ap-southeast-2": {
+        "cwlogs": "us-west-2"
+      },
+      "eu-central-1": {
+        "cwlogs": "eu-west-1"
+      },
+      "eu-west-1": {
+        "cwlogs": "eu-west-1"
+      },
+      "sa-east-1": {
+        "cwlogs": "us-east-1"
+      },
+      "us-east-1": {
+        "cwlogs": "us-east-1"
+      },
+      "us-west-1": {
+        "cwlogs": "us-west-2"
+      },
+      "us-west-2": {
+        "cwlogs": "us-west-2"
+      }
+    },
+    "RegionAZs": {
+      "ap-northeast-1": {
+        "AZ": [
+          "ap-northeast-1a",
+          "ap-northeast-1b"
+        ]
+      },
+      "ap-southeast-1": {
+        "AZ": [
+          "ap-southeast-1a",
+          "ap-southeast-1b"
+        ]
+      },
+      "ap-southeast-2": {
+        "AZ": [
+          "ap-southeast-2a",
+          "ap-southeast-2b"
+        ]
+      },
+      "eu-central-1": {
+        "AZ": [
+          "eu-central-1a",
+          "eu-central-1b"
+        ]
+      },
+      "eu-west-1": {
+        "AZ": [
+          "eu-west-1a",
+          "eu-west-1b"
+        ]
+      },
+      "sa-east-1": {
+        "AZ": [
+          "sa-east-1a",
+          "sa-east-1b"
+        ]
+      },
+      "us-east-1": {
+        "AZ": [
+          "us-east-1b",
+          "us-east-1d"
+        ]
+      },
+      "us-west-1": {
+        "AZ": [
+          "us-west-1b",
+          "us-west-1a"
+        ]
+      },
+      "us-west-2": {
+        "AZ": [
+          "us-west-2a",
+          "us-west-2b"
+        ]
+      }
+    },
+    "S3Endpoints": {
+      "ap-northeast-1": {
+        "endpoint": "s3-ap-northeast-1.amazonaws.com"
+      },
+      "ap-southeast-1": {
+        "endpoint": "s3-ap-southeast-1.amazonaws.com"
+      },
+      "ap-southeast-2": {
+        "endpoint": "s3-ap-southeast-2.amazonaws.com"
+      },
+      "eu-central-1": {
+        "endpoint": "s3-eu-central-1.amazonaws.com"
+      },
+      "eu-west-1": {
+        "endpoint": "s3-eu-west-1.amazonaws.com"
+      },
+      "sa-east-1": {
+        "endpoint": "s3-sa-east-1.amazonaws.com"
+      },
+      "us-east-1": {
+        "endpoint": "s3.amazonaws.com"
+      },
+      "us-west-1": {
+        "endpoint": "s3-us-west-1.amazonaws.com"
+      },
+      "us-west-2": {
+        "endpoint": "s3-us-west-2.amazonaws.com"
+      }
+    }
+  },
+  "Parameters": {
+    "CCCAllocatedStorage": {
+      "Description": "storage to allocate for the CCC DB",
+      "Type": "String",
+      "Default": "80"
+    },
+    "CorpDBAllocatedStorage": {
+      "Description": "storage to allocate for the Corp DB",
+      "Type": "String",
+      "Default": "80"
+    },
+    "CCCDBInstanceClass": {
+      "Description": "instance class of CCCDB, must support encryption at rest",
+      "Type": "String",
+      "Default": "db.m4.large"
+    },
+    "CorpDBInstanceClass": {
+      "Description": "instance class of CCCDB, must support encryption at rest",
+      "Type": "String",
+      "Default": "db.m4.xlarge"
+    },
+    "AppServerAMI": {
+      "Description": "AMI for the app server",
+      "Type": "String",
+      "Default": "ami-402f1a33"
+    },
+    "ConversionProcessAMI": {
+      "Description": "AMI for the ConversionProcess server",
+      "Type": "String",
+      "Default": "ami-402f1a33"
+    },
+    "JumpHostAMI": {
+      "Description": "AMI for the jump host",
+      "Type": "String",
+      "Default": "ami-f9dd458a"
+    },
+    "JumpHostInstanceType": {
+      "Default": "t2.medium",
+      "Description": "AppServer instance type",
+      "Type": "String"
+    },
+    "AppServerInstanceType": {
+      "Default": "c4.2xlarge",
+      "Description": "AppServer instance type",
+      "Type": "String"
+    },
+    "ConversionProcessInstanceType": {
+      "Default": "c4.2xlarge",
+      "Description": "AppServer instance type",
+      "Type": "String"
+    },
+    "AppServersInstanceMax": {
+      "Default": 5,
+      "Description": "AppServer Node EC2 instance max count",
+      "Type": "Number"
+    },
+    "AppServersInstanceMin": {
+      "Default": 1,
+      "Description": "AppServer Node EC2 instance min count",
+      "Type": "Number"
+    },
+    "ConversionProcessInstanceMax": {
+      "Default": 10,
+      "Description": "ConversionProcess Node EC2 instance max count",
+      "Type": "Number"
+    },
+    "ConversionProcessInstanceMin": {
+      "Default": 2,
+      "Description": "ConversionProcess Node EC2 instance min count",
+      "Type": "Number"
+    },
+    "AvailabilityZones": {
+      "Description": "AZ(s) to deploy in to",
+      "Type": "CommaDelimitedList",
+      "Default": "eu-west-1a,eu-west-1b"
+    },
+    "TarballBucket": {
+      "Description": "bucket for tarball",
+      "Type": "String"
+    },
+    "DBMasterPassword": {
+      "NoEcho": "true",
+      "Default": "password",
+      "Description": "Master password for both DBs",
+      "Type": "String"
+    },
+    "DBMasterUsername": {
+      "NoEcho": "true",
+      "Default": "nobody",
+      "Description": "Master username for both DBs",
+      "Type": "String"
+    },
+    "KeyName": {
+      "Description": "SSH key to use",
+      "Type": "String",
+      "Default": "devkeypair"
+    },
+    "MailPassword": {
+      "NoEcho": "true",
+      "Description": "SMTP password",
+      "Type": "String",
+      "Default": "AhOrJ3E0RJUrd0i7d9sftYR8+a8E45T6QYi/X5rDbtpl"
+    },
+    "MailServer": {
+      "Description": "Address of the mail server",
+      "Type": "String",
+      "Default": "email-smtp.eu-west-1.amazonaws.com"
+    },
+    "MailUser": {
+      "NoEcho": "true",
+      "Description": "SMTP Username",
+      "Type": "String",
+      "Default": "AKIAJOGN4ZJ4INX2VDYQ"
+    },
+    "SSLCertificateARN": {
+      "Description": "ARN of the SSL certificate attached to the port 443 listener",
+      "Type": "String",
+      "Default": "arn:aws:iam::417207121721:server-certificate/fwmigrate.sophos.com-SELFSIGNED"
+    },
+    "TarballPath": {
+      "Description": "Path to Root tarball under the configbucket",
+      "Type": "String"
+    },
+    "SupportedFilesPath": {
+      "Description": "Path to supported files for Root tarball under the configbucket",
+      "Type": "String"
+    },
+    "ValidIPs": {
+      "Description": "List of IP addresses this server can take",
+      "Type": "String",
+      "Default": "52.17.192.161"
+    },
+    "OperatorEmail": {
+      "Default": "nobody@amazon.com",
+      "Description": "Email address to notify if there are any operational issues",
+      "Type": "String"
+    }
+  },
+  "Resources": {
+    "ConversionProcessDLQ": {
+      "Type": "AWS::SQS::Queue",
+      "Properties": {
+        "ContentBasedDeduplication": true,
+        "FifoQueue": true,
+        "MaximumMessageSize": 1024,
+        "MessageRetentionPeriod": 345600,
+        "VisibilityTimeout": "60"
+      }
+    },
+    "ConversionProcessQueue": {
+      "Type": "AWS::SQS::Queue",
+      "Properties": {
+        "ContentBasedDeduplication": true,
+        "FifoQueue": true,
+        "MaximumMessageSize": 1024,
+        "MessageRetentionPeriod": 345600,
+        "VisibilityTimeout": "60",
+        "RedrivePolicy": {
+          "maxReceiveCount": 1000,
+          "deadLetterTargetArn": {
+            "Fn::GetAtt": [
+              "ConversionProcessDLQ",
+              "Arn"
+            ]
+          }
+        }
+      }
+    },
+    "ConversionProcessQueuePolicy": {
+      "Type": "AWS::SQS::QueuePolicy",
+      "Properties": {
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": [
+                "sqs:*"
+              ],
+              "Principal": {
+                "AWS": "*"
+              },
+              "Effect": "Allow",
+              "Resource": {
+                "Fn::GetAtt": [
+                  "ConversionProcessQueue",
+                  "Arn"
+                ]
+              },
+              "Condition": {
+                "ArnEquals": {
+                  "aws:SourceArn": {
+                    "Fn::GetAtt": [
+                      "OCMAppServerRole",
+                      "Arn"
+                    ]
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "Queues": [
+          {
+            "Ref": "ConversionProcessQueue"
+          }
+        ]
+      }
+    },
+    "OCMEFS": {
+      "Type": "AWS::EFS::FileSystem",
+      "Properties": {
+        "FileSystemTags": [
+          {
+            "Key": "Name",
+            "Value": "OCM EFS Filesystem"
+          }
+        ]
+      }
+    },
+    "EFSMountTargetA": {
+      "Type": "AWS::EFS::MountTarget",
+      "Properties": {
+        "FileSystemId": {
+          "Ref": "OCMEFS"
+        },
+        "SubnetId": {
+          "Ref": "FrontendSubnetA"
+        },
+        "SecurityGroups": [
+          {
+            "Ref": "EFSSecurityGroup"
+          }
+        ]
+      }
+    },
+    "EFSMountTargetB": {
+      "Type": "AWS::EFS::MountTarget",
+      "Properties": {
+        "FileSystemId": {
+          "Ref": "OCMEFS"
+        },
+        "SubnetId": {
+          "Ref": "FrontendSubnetB"
+        },
+        "SecurityGroups": [
+          {
+            "Ref": "EFSSecurityGroup"
+          }
+        ]
+      }
+    },
+    "EFSSecurityGroup": {
+      "Properties": {
+        "GroupDescription": "OCM EFS Security Group",
+        "SecurityGroupIngress": [
+          {
+            "FromPort": "2049",
+            "IpProtocol": "tcp",
+            "SourceSecurityGroupId": {
+              "Ref": "AppServerSecurityGroup"
+            },
+            "ToPort": "2049"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "OCM EFS security group"
+          },
+          {
+            "Key": "Infrastructure",
+            "Value": "OCM"
+          },
+          {
+            "Key": "Owner",
+            "Value": "DCO"
+          }
+        ],
+        "VpcId": {
+          "Ref": "VPC"
+        }
+      },
+      "Type": "AWS::EC2::SecurityGroup"
+    },
+    "AppServerASG": {
+      "DependsOn": [
+        "EFSMountTargetA",
+        "EFSMountTargetB"
+      ],
+      "Properties": {
+        "AvailabilityZones": {
+          "Ref": "AvailabilityZones"
+        },
+        "LaunchConfigurationName": {
+          "Ref": "AppServerLaunchConfig"
+        },
+        "LoadBalancerNames": [
+          {
+            "Ref": "AppServerCustomerFacingELB"
+          },
+          {
+            "Ref": "AppServerInternalFacingELB"
+          }
+        ],
+        "MaxSize": {
+          "Ref": "AppServersInstanceMax"
+        },
+        "MetricsCollection": [
+          {
+            "Granularity": "1Minute"
+          }
+        ],
+        "MinSize": {
+          "Ref": "AppServersInstanceMin"
+        },
+        "DesiredCapacity": {
+          "Ref": "AppServersInstanceMin"
+        },
+        "NotificationConfigurations": [
+          {
+            "TopicARN": {
+              "Ref": "ScalingOutAlarmTopic"
+            },
+            "NotificationTypes": [
+              "autoscaling:EC2_INSTANCE_LAUNCH",
+              "autoscaling:EC2_INSTANCE_LAUNCH_ERROR"
+            ]
+          },
+          {
+            "TopicARN": {
+              "Ref": "ScalingInAlarmTopic"
+            },
+            "NotificationTypes": [
+              "autoscaling:EC2_INSTANCE_TERMINATE",
+              "autoscaling:EC2_INSTANCE_TERMINATE_ERROR"
+            ]
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "PropagateAtLaunch": true,
+            "Value": "AppServer"
+          },
+          {
+            "Key": "Infrastructure",
+            "PropagateAtLaunch": true,
+            "Value": "OCM"
+          },
+          {
+            "Key": "Owner",
+            "PropagateAtLaunch": true,
+            "Value": "DCO"
+          }
+        ],
+        "TerminationPolicies": [
+          "OldestInstance",
+          "ClosestToNextInstanceHour"
+        ],
+        "VPCZoneIdentifier": [
+          {
+            "Ref": "FrontendSubnetA"
+          },
+          {
+            "Ref": "FrontendSubnetB"
+          }
+        ]
+      },
+      "Type": "AWS::AutoScaling::AutoScalingGroup"
+    },
+    "ConversionProcessServerASG": {
+      "DependsOn": [
+        "EFSMountTargetA",
+        "EFSMountTargetB"
+      ],
+      "Properties": {
+        "AvailabilityZones": {
+          "Ref": "AvailabilityZones"
+        },
+        "LaunchConfigurationName": {
+          "Ref": "ConversionProcessLaunchConfig"
+        },
+        "MaxSize": {
+          "Ref": "ConversionProcessInstanceMax"
+        },
+        "MinSize": {
+          "Ref": "ConversionProcessInstanceMin"
+        },
+        "MetricsCollection": [
+          {
+            "Granularity": "1Minute"
+          }
+        ],
+        "DesiredCapacity": {
+          "Ref": "ConversionProcessInstanceMin"
+        },
+        "NotificationConfigurations": [
+          {
+            "TopicARN": {
+              "Ref": "ScalingOutAlarmTopic"
+            },
+            "NotificationTypes": [
+              "autoscaling:EC2_INSTANCE_LAUNCH",
+              "autoscaling:EC2_INSTANCE_LAUNCH_ERROR"
+            ]
+          },
+          {
+            "TopicARN": {
+              "Ref": "ScalingInAlarmTopic"
+            },
+            "NotificationTypes": [
+              "autoscaling:EC2_INSTANCE_TERMINATE",
+              "autoscaling:EC2_INSTANCE_TERMINATE_ERROR"
+            ]
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "PropagateAtLaunch": true,
+            "Value": "ConversionProcess"
+          },
+          {
+            "Key": "Infrastructure",
+            "PropagateAtLaunch": true,
+            "Value": "OCM"
+          },
+          {
+            "Key": "Owner",
+            "PropagateAtLaunch": true,
+            "Value": "DCO"
+          }
+        ],
+        "TerminationPolicies": [
+          "OldestInstance",
+          "ClosestToNextInstanceHour"
+        ],
+        "VPCZoneIdentifier": [
+          {
+            "Ref": "FrontendSubnetA"
+          },
+          {
+            "Ref": "FrontendSubnetB"
+          }
+        ]
+      },
+      "Type": "AWS::AutoScaling::AutoScalingGroup"
+    },
+    "JumpHostASG": {
+      "Properties": {
+        "AvailabilityZones": [
+          {
+            "Fn::Select": [
+              "0",
+              {
+                "Ref": "AvailabilityZones"
+              }
+            ]
+          }
+        ],
+        "LaunchConfigurationName": {
+          "Ref": "JumpHostLaunchConfig"
+        },
+        "MaxSize": "1",
+        "MetricsCollection": [
+          {
+            "Granularity": "1Minute"
+          }
+        ],
+        "MinSize": "1",
+        "NotificationConfigurations": [
+          {
+            "TopicARN": {
+              "Ref": "ScalingOutAlarmTopic"
+            },
+            "NotificationTypes": [
+              "autoscaling:EC2_INSTANCE_LAUNCH",
+              "autoscaling:EC2_INSTANCE_LAUNCH_ERROR"
+            ]
+          },
+          {
+            "TopicARN": {
+              "Ref": "ScalingInAlarmTopic"
+            },
+            "NotificationTypes": [
+              "autoscaling:EC2_INSTANCE_TERMINATE",
+              "autoscaling:EC2_INSTANCE_TERMINATE_ERROR"
+            ]
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "PropagateAtLaunch": true,
+            "Value": "JumpHost"
+          },
+          {
+            "Key": "Infrastructure",
+            "PropagateAtLaunch": true,
+            "Value": "OCM"
+          },
+          {
+            "Key": "Owner",
+            "PropagateAtLaunch": true,
+            "Value": "DCO"
+          }
+        ],
+        "TerminationPolicies": [
+          "OldestInstance",
+          "ClosestToNextInstanceHour"
+        ],
+        "VPCZoneIdentifier": [
+          {
+            "Ref": "JumpHostSubnetA"
+          }
+        ]
+      },
+      "Type": "AWS::AutoScaling::AutoScalingGroup"
+    },
+    "AppServerGroupScaleOutPolicy": {
+      "Type": "AWS::AutoScaling::ScalingPolicy",
+      "Properties": {
+        "AdjustmentType": "ChangeInCapacity",
+        "PolicyType": "StepScaling",
+        "StepAdjustments": [
+          {
+            "ScalingAdjustment": 1,
+            "MetricIntervalUpperBound": 0.0
+          }
+        ],
+        "AutoScalingGroupName": {
+          "Ref": "AppServerASG"
+        }
+      }
+    },
+    "AppServerGroupScaleInPolicy": {
+      "Type": "AWS::AutoScaling::ScalingPolicy",
+      "Properties": {
+        "AdjustmentType": "ChangeInCapacity",
+        "PolicyType": "StepScaling",
+        "StepAdjustments": [
+          {
+            "ScalingAdjustment": -1,
+            "MetricIntervalLowerBound": 0.0
+          }
+        ],
+        "AutoScalingGroupName": {
+          "Ref": "AppServerASG"
+        }
+      }
+    },
+    "ConversionProcessASGScaleOutPolicy": {
+      "Type": "AWS::AutoScaling::ScalingPolicy",
+      "Properties": {
+        "AdjustmentType": "ChangeInCapacity",
+        "PolicyType": "StepScaling",
+        "StepAdjustments": [
+          {
+            "ScalingAdjustment": 1,
+            "MetricIntervalLowerBound": 0.0
+          }
+        ],
+        "AutoScalingGroupName": {
+          "Ref": "ConversionProcessServerASG"
+        }
+      }
+    },
+    "ConversionProcessASGScaleInPolicy": {
+      "Type": "AWS::AutoScaling::ScalingPolicy",
+      "Properties": {
+        "AdjustmentType": "ChangeInCapacity",
+        "PolicyType": "StepScaling",
+        "StepAdjustments": [
+          {
+            "ScalingAdjustment": -1,
+            "MetricIntervalLowerBound": 0.0
+          }
+        ],
+        "AutoScalingGroupName": {
+          "Ref": "ConversionProcessServerASG"
+        }
+      }
+    },
+    "ScalingOutAlarmTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "DisplayName": "autoscaling-out-alarm",
+        "Subscription": [
+          {
+            "Endpoint": {
+              "Ref": "OperatorEmail"
+            },
+            "Protocol": "email"
+          }
+        ]
+      }
+    },
+    "ScalingInAlarmTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "DisplayName": "autoscaling-in-alarm",
+        "Subscription": [
+          {
+            "Endpoint": {
+              "Ref": "OperatorEmail"
+            },
+            "Protocol": "email"
+          }
+        ]
+      }
+    },
+    "AppServerGroupHighCPUAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "ActionsEnabled": "true",
+        "EvaluationPeriods": "1",
+        "Statistic": "Average",
+        "Threshold": "60",
+        "AlarmDescription": "Alarm if CPU too high or metric disappears indicating instance is down",
+        "Period": "300",
+        "AlarmActions": [
+          {
+            "Ref": "AppServerGroupScaleOutPolicy"
+          }
+        ],
+        "Namespace": "AWS/EC2",
+        "Dimensions": [
+          {
+            "Name": "AutoScalingGroupName",
+            "Value": {
+              "Ref": "AppServerASG"
+            }
+          }
+        ],
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "MetricName": "CPUUtilization"
+      }
+    },
+    "AppServerGroupLowCPUAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "EvaluationPeriods": "1",
+        "Statistic": "Average",
+        "Threshold": "10",
+        "AlarmDescription": "Alarm if CPU too low",
+        "Period": "300",
+        "AlarmActions": [
+          {
+            "Ref": "AppServerGroupScaleInPolicy"
+          }
+        ],
+        "Namespace": "AWS/EC2",
+        "Dimensions": [
+          {
+            "Name": "AutoScalingGroupName",
+            "Value": {
+              "Ref": "AppServerASG"
+            }
+          }
+        ],
+        "ComparisonOperator": "LessThanOrEqualToThreshold",
+        "MetricName": "CPUUtilization"
+      }
+    },
+    "ConversionProcessHighCPUAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "EvaluationPeriods": "1",
+        "Statistic": "Average",
+        "Threshold": "60",
+        "AlarmDescription": "Alarm if CPU too high or metric disappears indicating instance is down",
+        "Period": "300",
+        "AlarmActions": [
+          {
+            "Ref": "ConversionProcessASGScaleOutPolicy"
+          }
+        ],
+        "Namespace": "AWS/EC2",
+        "Dimensions": [
+          {
+            "Name": "AutoScalingGroupName",
+            "Value": {
+              "Ref": "ConversionProcessServerASG"
+            }
+          }
+        ],
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "MetricName": "CPUUtilization"
+      }
+    },
+    "ConversionProcessLowCPUAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "EvaluationPeriods": "1",
+        "Statistic": "Average",
+        "Threshold": "5",
+        "AlarmDescription": "Alarm if CPU too low",
+        "Period": "300",
+        "AlarmActions": [
+          {
+            "Ref": "ConversionProcessASGScaleInPolicy"
+          }
+        ],
+        "Namespace": "AWS/EC2",
+        "Dimensions": [
+          {
+            "Name": "AutoScalingGroupName",
+            "Value": {
+              "Ref": "ConversionProcessServerASG"
+            }
+          }
+        ],
+        "ComparisonOperator": "LessThanOrEqualToThreshold",
+        "MetricName": "CPUUtilization"
+      }
+    },
+    "JumpHostLaunchConfig": {
+      "Properties": {
+        "AssociatePublicIpAddress": true,
+        "IamInstanceProfile": {
+          "Ref": "JumpHostInstanceProfile"
+        },
+        "ImageId": {
+          "Ref": "JumpHostAMI"
+        },
+        "InstanceType": {
+          "Ref": "JumpHostInstanceType"
+        },
+        "KeyName": {
+          "Ref": "KeyName"
+        },
+        "SecurityGroups": [
+          {
+            "Ref": "JumpHostSecurityGroup"
+          }
+        ],
+        "UserData": {
+          "Fn::Base64": {
+            "Fn::Join": [
+              "",
+              [
+                "#!/bin/sh\n",
+                "exec 1<&-; exec 2<&- ; exec 1<>/tmp/setup.log ; exec 2>&1\n",
+                "/usr/bin/yum update -y\n",
+                "/usr/bin/yum install -y awslogs\n",
+                "/bin/sed -i 's!us-east-1!",
+                {
+                  "Ref": "AWS::Region"
+                },
+                "!' /etc/awslogs/awscli.conf\n",
+                "/sbin/service awslogs start\n",
+                "/sbin/chkconfig awslogs on\n"
+              ]
+            ]
+          }
+        }
+      },
+      "Type": "AWS::AutoScaling::LaunchConfiguration"
+    },
+    "AppServerCustomerFacingELB": {
+      "Properties": {
+        "HealthCheck": {
+          "HealthyThreshold": "3",
+          "Interval": "30",
+          "Target": "HTTP:80/",
+          "Timeout": "5",
+          "UnhealthyThreshold": "5"
+        },
+        "Listeners": [
+          {
+            "InstancePort": "80",
+            "InstanceProtocol": "HTTP",
+            "LoadBalancerPort": "443",
+            "Protocol": "HTTPS",
+            "SSLCertificateId": {
+              "Ref": "SSLCertificateARN"
+            },
+            "PolicyNames": [
+              "my-duration-sticky-policy"
+            ]
+          }
+        ],
+        "Scheme": "internet-facing",
+        "SecurityGroups": [
+          {
+            "Fn::GetAtt": [
+              "ELBSecurityGroup",
+              "GroupId"
+            ]
+          }
+        ],
+        "ConnectionSettings": {
+          "IdleTimeout": 1800
+        },
+        "LBCookieStickinessPolicy": [
+          {
+            "CookieExpirationPeriod": 300,
+            "PolicyName": "my-duration-sticky-policy"
+          }
+        ],
+        "Subnets": [
+          {
+            "Ref": "ELBSubnetA"
+          },
+          {
+            "Ref": "ELBSubnetB"
+          }
+        ]
+      },
+      "Type": "AWS::ElasticLoadBalancing::LoadBalancer"
+    },
+    "AppServerInternalFacingELB": {
+      "Properties": {
+        "HealthCheck": {
+          "HealthyThreshold": "3",
+          "Interval": "30",
+          "Target": "TCP:443",
+          "Timeout": "5",
+          "UnhealthyThreshold": "5"
+        },
+        "Listeners": [
+          {
+            "InstancePort": "443",
+            "InstanceProtocol": "TCP",
+            "LoadBalancerPort": "443",
+            "Protocol": "TCP"
+          }
+        ],
+        "Scheme": "internet-facing",
+        "SecurityGroups": [
+          {
+            "Fn::GetAtt": [
+              "ELBSecurityGroup",
+              "GroupId"
+            ]
+          }
+        ],
+        "ConnectionSettings": {
+          "IdleTimeout": 1800
+        },
+        "Subnets": [
+          {
+            "Ref": "ELBSubnetA"
+          },
+          {
+            "Ref": "ELBSubnetB"
+          }
+        ]
+      },
+      "Type": "AWS::ElasticLoadBalancing::LoadBalancer"
+    },
+    "myDNS": {
+      "Type": "AWS::Route53::RecordSetGroup",
+      "Properties": {
+        "HostedZoneName": "qa.fwmigrate.sophos.com.",
+        "Comment": "Zone apex alias targeted to AppServerCustomerFacingELB LoadBalancer.",
+        "RecordSets": [
+          {
+            "Name": "qa.fwmigrate.sophos.com.",
+            "Type": "A",
+            "AliasTarget": {
+              "HostedZoneId": {
+                "Fn::GetAtt": [
+                  "AppServerCustomerFacingELB",
+                  "CanonicalHostedZoneNameID"
+                ]
+              },
+              "DNSName": {
+                "Fn::GetAtt": [
+                  "AppServerCustomerFacingELB",
+                  "DNSName"
+                ]
+              }
+            }
+          }
+        ]
+      }
+    },
+    "OCMDataBucket": {
+      "Type": "AWS::S3::Bucket",
+      "DeletionPolicy": "Retain"
+    },
+    "OCMDataBucketPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": {
+          "Ref": "OCMDataBucket"
+        },
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": [
+                "s3:PutObject"
+              ],
+              "Effect": "Allow",
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:aws:s3:::",
+                    {
+                      "Ref": "OCMDataBucket"
+                    },
+                    "/*"
+                  ]
+                ]
+              },
+              "Principal": "*",
+              "Condition": {
+                "StringNotEquals": {
+                  "s3:x-amz-server-side-encryption": "AES256"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "OCMLogsBucket": {
+      "Type": "AWS::S3::Bucket",
+      "DeletionPolicy": "Retain"
+    },
+    "AppServerLaunchConfig": {
+      "Metadata": {
+        "AWS::CloudFormation::Authentication": {
+          "S3AccessCreds": {
+            "buckets": [
+              {
+                "Ref": "TarballBucket"
+              }
+            ],
+            "roleName": {
+              "Ref": "OCMAppServerRole"
+            },
+            "type": "S3"
+          }
+        },
+        "AWS::CloudFormation::Init": {
+          "config": {
+            "commands": {
+              "001_download_cwlogs_agent": {
+                "command": "curl https://s3.amazonaws.com/aws-cloudwatch/downloads/latest/awslogs-agent-setup.py -O"
+              },
+              "002_install_agent": {
+                "command": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "python awslogs-agent-setup.py --region ",
+                      {
+                        "Ref": "AWS::Region"
+                      },
+                      " --non-interactive --configfile=/tmp/awslogs.conf"
+                    ]
+                  ]
+                }
+              },
+              "0025_install_ssm_agent": {
+                "command": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "curl https://amazon-ssm-",
+                      {
+                        "Ref": "AWS::Region"
+                      },
+                      ".s3.amazonaws.com/latest/debian_amd64/amazon-ssm-agent.deb -o /tmp/amazon-ssm-agent.deb && dpkg -i /tmp/amazon-ssm-agent.deb && sleep 2 && update-rc.d amazon-ssm-agent defaults"
+                    ]
+                  ]
+                }
+              },
+              "003_make_chroot": {
+                "command": "mkdir -p /root/chroot_env"
+              },
+              "004_expand_tarball": {
+                "command": "tar xzvf /root/root.tgz -C /root/chroot_env"
+              },
+              "005_copy_ccmsloader": {
+                "command": "mv /root/ccmsloader.img /root/chroot_env"
+              },
+              "006_copy_s3wrapper": {
+                "command": "mv /root/s3wrapper.sh /root/chroot_env"
+              },
+              "007_copy_sysinit_scfm": {
+                "command": "mv /root/sysinit_scfm.sh /root/chroot_env"
+              },
+              "010_firstboot": {
+                "command": "/sbin/shutdown -r now"
+              }
+            },
+            "files": {
+              "/root/root.tgz": {
+                "source": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "https://",
+                      {
+                        "Fn::FindInMap": [
+                          "S3Endpoints",
+                          {
+                            "Ref": "AWS::Region"
+                          },
+                          "endpoint"
+                        ]
+                      },
+                      "/",
+                      {
+                        "Ref": "TarballPath"
+                      }
+                    ]
+                  ]
+                },
+                "authentication": "S3AccessCreds"
+              },
+              "/root/ccmsloader.img": {
+                "source": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "https://",
+                      {
+                        "Fn::FindInMap": [
+                          "S3Endpoints",
+                          {
+                            "Ref": "AWS::Region"
+                          },
+                          "endpoint"
+                        ]
+                      },
+                      "/",
+                      {
+                        "Ref": "SupportedFilesPath"
+                      },
+                      "/ccmsloader.img"
+                    ]
+                  ]
+                },
+                "authentication": "S3AccessCreds"
+              },
+              "/root/s3wrapper.sh": {
+                "source": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "https://",
+                      {
+                        "Fn::FindInMap": [
+                          "S3Endpoints",
+                          {
+                            "Ref": "AWS::Region"
+                          },
+                          "endpoint"
+                        ]
+                      },
+                      "/",
+                      {
+                        "Ref": "SupportedFilesPath"
+                      },
+                      "/s3wrapper.sh"
+                    ]
+                  ]
+                },
+                "authentication": "S3AccessCreds"
+              },
+              "/root/sysinit_scfm.sh": {
+                "source": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "https://",
+                      {
+                        "Fn::FindInMap": [
+                          "S3Endpoints",
+                          {
+                            "Ref": "AWS::Region"
+                          },
+                          "endpoint"
+                        ]
+                      },
+                      "/",
+                      {
+                        "Ref": "SupportedFilesPath"
+                      },
+                      "/sysinit_scfm.sh"
+                    ]
+                  ]
+                },
+                "authentication": "S3AccessCreds"
+              },
+              "/tmp/awslogs.conf": {
+                "content": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "[general]\n",
+                      "state_file = /var/awslogs/state/agent-state\n",
+                      "[/var/log/syslog]\n",
+                      "datetime_format = %b %d %H:%M:%S\n",
+                      "file = /var/log/syslog\n",
+                      "buffer_duration = 5000\n",
+                      "log_stream_name = {instance_id}\n",
+                      "initial_position = start_of_file\n",
+                      "log_group_name = /var/log/syslog\n"
+                    ]
+                  ]
+                },
+                "group": "root",
+                "mode": "755",
+                "owner": "root"
+              },
+              "/etc/init.d/amazon-ssm-agent": {
+                "content": {
+                  "Fn::Join": [
+                    "\n",
+                    [
+                      "#!/bin/sh",
+                      "### BEGIN INIT INFO",
+                      "# Provides:          amazon-ssm-agent",
+                      "# Required-Start:    $local_fs $network $named $time $syslog",
+                      "# Required-Stop:     $local_fs $network $named $time $syslog",
+                      "# Default-Start:     2 3 4 5",
+                      "# Default-Stop:      0 1 6",
+                      "# Description:       Amazon SSM Agent",
+                      "### END INIT INFO",
+                      "PIDNAME=amazon-ssm-agent",
+                      "SCRIPT=/usr/bin/amazon-ssm-agent",
+                      "RUNAS=root",
+                      "PIDFILE=/var/run/amazon-ssm-agent.pid",
+                      "LOGFILE=/var/log/amazon-ssm-agent.log",
+                      "start() {",
+                      "  if [ -f /var/run/$PIDNAME ] && kill -0 $(cat /var/run/$PIDNAME); then",
+                      "    echo 'Service already running' >&2",
+                      "    return 1",
+                      "  fi",
+                      "  echo 'Starting service?' >&2",
+                      "  local CMD=\"$SCRIPT &> \\\"$LOGFILE\\\" & echo \\$!\"",
+                      "  su -c \"$CMD\" $RUNAS > \"$PIDFILE\"",
+                      "  echo 'Service started' >&2",
+                      "}",
+                      "stop() {",
+                      "  if [ ! -f \"$PIDFILE\" ] || ! kill -0 $(cat \"$PIDFILE\"); then",
+                      "    echo 'Service not running' >&2",
+                      "    return 1",
+                      "  fi",
+                      "  echo 'Stopping service?' >&2",
+                      "  kill -15 $(cat \"$PIDFILE\") && rm -f \"$PIDFILE\"",
+                      "  echo 'Service stopped' >&2",
+                      "}",
+                      "case \"$1\" in",
+                      "  start)",
+                      "    start",
+                      "    ;;",
+                      "  stop)",
+                      "    stop",
+                      "    ;;",
+                      "  retart)",
+                      "    stop",
+                      "    start",
+                      "    ;;",
+                      "  *)",
+                      "    echo \"Usage: $0 {start|stop|restart}\"",
+                      "esac"
+                    ]
+                  ]
+                },
+                "group": "root",
+                "mode": "755",
+                "owner": "root"
+              },
+              "/etc/cron.d/backup_logs_to_s3": {
+                "content": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "*/10 * * * * root /usr/local/bin/aws s3 sync /root/chroot_env/_root/log/ s3://",
+                      {
+                        "Ref": "OCMLogsBucket"
+                      },
+                      "/$(curl -L http://169.254.169.254/latest/meta-data/instance-id)/log/\n",
+                      "*/10 * * * * root /usr/local/bin/aws s3 sync /root/chroot_env/_root/var/OCMLogger/ s3://",
+                      {
+                        "Ref": "OCMLogsBucket"
+                      },
+                      "/$(curl -L http://169.254.169.254/latest/meta-data/instance-id)/OCMLogger/\n"
+                    ]
+                  ]
+                },
+                "group": "root",
+                "mode": "755",
+                "owner": "root"
+              },
+              "/etc/rc.local": {
+                "content": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "#!/bin/sh -e\n",
+                      ". /etc/scfm.conf\n",
+                      "cd /root/chroot_env\n",
+                      "/bin/sh sysinit_scfm.sh /root/chroot_env/_root\n"
+                    ]
+                  ]
+                },
+                "group": "root",
+                "mode": "755",
+                "owner": "root"
+              },
+              "/etc/scfm.conf": {
+                "content": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "export APPLIANCE=SCCM_AWS\n",
+                      "export SOPHOS_ON_CLOUD=y\n",
+                      "export FIRSTBOOT=OFF\n",
+                      "export zd=/dev/xvdf\n",
+                      "export nameserver=169.254.169.253\n",
+                      "export PGHOST=10.10.10.10\n",
+                      "export AUTOSTART=ON\n",
+                      "export cccdbip=",
+                      {
+                        "Fn::GetAtt": [
+                          "CCCDB",
+                          "Endpoint.Address"
+                        ]
+                      },
+                      "\n",
+                      "export corpdbip=",
+                      {
+                        "Fn::GetAtt": [
+                          "CorpDB",
+                          "Endpoint.Address"
+                        ]
+                      },
+                      "\n",
+                      "export cccdbport=",
+                      {
+                        "Fn::GetAtt": [
+                          "CCCDB",
+                          "Endpoint.Port"
+                        ]
+                      },
+                      "\n",
+                      "export crdbport=",
+                      {
+                        "Fn::GetAtt": [
+                          "CorpDB",
+                          "Endpoint.Port"
+                        ]
+                      },
+                      "\n",
+                      "export dbusername=",
+                      {
+                        "Ref": "DBMasterUsername"
+                      },
+                      "\n",
+                      "export dbpassword=",
+                      {
+                        "Ref": "DBMasterPassword"
+                      },
+                      "\n",
+                      "export PGPASSWORD=",
+                      {
+                        "Ref": "DBMasterPassword"
+                      },
+                      "\n",
+                      "export instance_intended_for=ApplicationPortal\n",
+                      "export databucket=",
+                      {
+                        "Ref": "OCMDataBucket"
+                      },
+                      "\n",
+                      "export conversion_process_queue_name=",
+                      {
+                        "Fn::GetAtt": [
+                          "ConversionProcessQueue",
+                          "QueueName"
+                        ]
+                      },
+                      "\n",
+                      "export mailserver=",
+                      {
+                        "Ref": "MailServer"
+                      },
+                      "\n",
+                      "export mailuser=",
+                      {
+                        "Ref": "MailUser"
+                      },
+                      "\n",
+                      "export mailpassword=",
+                      {
+                        "Ref": "MailPassword"
+                      },
+                      "\n",
+                      "export backup=/backup\n",
+                      "export BACKUP=/backup\n",
+                      "export sig=/sig\n",
+                      "export iamrole=",
+                      {
+                        "Ref": "OCMAppServerRole"
+                      },
+                      "\n",
+                      "export war=/war\n",
+                      "export S3MNT=/efs/\n",
+                      "export PERL_INLINE_DIRECTORY=/lib64/perl_inline_std/\n",
+                      "export CSC_PATH=/lib\n",
+                      "export AWS=true\n",
+                      "export s3_endpoint=",
+                      {
+                        "Fn::FindInMap": [
+                          "S3Endpoints",
+                          {
+                            "Ref": "AWS::Region"
+                          },
+                          "endpoint"
+                        ]
+                      },
+                      "\n",
+                      "export aws_region=",
+                      {
+                        "Ref": "AWS::Region"
+                      },
+                      "\n"
+                    ]
+                  ]
+                },
+                "group": "root",
+                "mode": "755",
+                "owner": "root"
+              }
+            }
+          }
+        }
+      },
+      "Properties": {
+        "BlockDeviceMappings": [
+          {
+            "DeviceName": "/dev/xvdf",
+            "Ebs": {
+              "VolumeSize": "1000",
+              "VolumeType": "st1",
+              "Encrypted": true
+            }
+          }
+        ],
+        "AssociatePublicIpAddress": false,
+        "IamInstanceProfile": {
+          "Ref": "OCMAppServerInstanceProfile"
+        },
+        "ImageId": {
+          "Ref": "AppServerAMI"
+        },
+        "InstanceType": {
+          "Ref": "AppServerInstanceType"
+        },
+        "KeyName": {
+          "Ref": "KeyName"
+        },
+        "SecurityGroups": [
+          {
+            "Ref": "AppServerSecurityGroup"
+          }
+        ],
+        "UserData": {
+          "Fn::Base64": {
+            "Fn::Join": [
+              "",
+              [
+                "#!/bin/sh\n",
+                "exec 1<&-; exec 2<&- ; exec 1<>/tmp/setup.log ; exec 2>&1\n",
+                "/usr/bin/apt-get update\n",
+                "/usr/bin/apt-get upgrade\n",
+                "/usr/bin/apt-get -y install python-setuptools less vim\n",
+                "/usr/bin/apt-get -y install curl\n",
+                "/usr/bin/apt-get -y install python-pip\n",
+                "/usr/bin/apt-get -y install nfs-common\n",
+                "/usr/bin/pip install awscli\n",
+                "/usr/bin/pip install aws-ec2-assign-elastic-ip\n",
+                "/usr/local/bin/aws-ec2-assign-elastic-ip --valid-ips ",
+                {
+                  "Ref": "ValidIPs"
+                },
+                "\n",
+                "/bin/mkdir -p /efs\n",
+                "echo $(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone).",
+                {
+                  "Ref": "OCMEFS"
+                },
+                ".efs.",
+                {
+                  "Ref": "AWS::Region"
+                },
+                ".amazonaws.com:/ /efs nfs defaults,nfsvers=4,minorversion=1 0 0 >> /etc/fstab\n",
+                "/bin/mount /efs\n",
+                "echo ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDqKE7tU8TFMyfsFxRPGR4r2av/HPF1ADkjqtAZrnFwLwUbnBz/caOCWb9MGv7YotdLLceibsvgPnNIhH80pQWxWaalJ5F86SWC+R7sWuK8bYXjgJYeCpHhskVxk0r5+M52ZMrWCrTHYs1XazjCwpPC0CHstkOdNlW9PeOebNXJXm2LNyW7rzT9nX8Wo0doAlFFxuHuTDVtFV6WxCOrqFb5FHPa78fO1K5a4/p7OCjOz/jgvMbriMg2zvFrHDRUvW4a5V5eWsMRdQE3328TouiekWiDXrhzC8v6AAL5kvYICdnTrVAoSdlZrH0WtRorTSDsY0ErZNrGm1v2/UAbGyWV >> /home/admin/.ssh/authorized_keys\n",
+                "/usr/bin/easy_install https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz\n",
+                "/usr/local/bin/cfn-init --region ",
+                {
+                  "Ref": "AWS::Region"
+                },
+                " -s ",
+                {
+                  "Ref": "AWS::StackName"
+                },
+                " -r AppServerLaunchConfig --role=",
+                {
+                  "Ref": "OCMAppServerRole"
+                },
+                "\n"
+              ]
+            ]
+          }
+        }
+      },
+      "Type": "AWS::AutoScaling::LaunchConfiguration"
+    },
+    "ConversionProcessLaunchConfig": {
+      "Metadata": {
+        "AWS::CloudFormation::Authentication": {
+          "S3AccessCreds": {
+            "buckets": [
+              {
+                "Ref": "TarballBucket"
+              }
+            ],
+            "roleName": {
+              "Ref": "OCMAppServerRole"
+            },
+            "type": "S3"
+          }
+        },
+        "AWS::CloudFormation::Init": {
+          "config": {
+            "commands": {
+              "001_download_cwlogs_agent": {
+                "command": "curl https://s3.amazonaws.com/aws-cloudwatch/downloads/latest/awslogs-agent-setup.py -O"
+              },
+              "002_install_agent": {
+                "command": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "python awslogs-agent-setup.py --region ",
+                      {
+                        "Ref": "AWS::Region"
+                      },
+                      " --non-interactive --configfile=/tmp/awslogs.conf"
+                    ]
+                  ]
+                }
+              },
+              "0025_install_ssm_agent": {
+                "command": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "curl https://amazon-ssm-",
+                      {
+                        "Ref": "AWS::Region"
+                      },
+                      ".s3.amazonaws.com/latest/debian_amd64/amazon-ssm-agent.deb -o /tmp/amazon-ssm-agent.deb && dpkg -i /tmp/amazon-ssm-agent.deb && sleep 2 && update-rc.d amazon-ssm-agent defaults"
+                    ]
+                  ]
+                }
+              },
+              "003_make_chroot": {
+                "command": "mkdir -p /root/chroot_env"
+              },
+              "004_expand_tarball": {
+                "command": "tar xzvf /root/root.tgz -C /root/chroot_env"
+              },
+              "005_copy_ccmsloader": {
+                "command": "mv /root/ccmsloader.img /root/chroot_env"
+              },
+              "006_copy_s3wrapper": {
+                "command": "mv /root/s3wrapper.sh /root/chroot_env"
+              },
+              "007_copy_sysinit_scfm": {
+                "command": "mv /root/sysinit_scfm.sh /root/chroot_env"
+              },
+              "010_firstboot": {
+                "command": "/sbin/shutdown -r now"
+              }
+            },
+            "files": {
+              "/root/root.tgz": {
+                "source": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "https://",
+                      {
+                        "Fn::FindInMap": [
+                          "S3Endpoints",
+                          {
+                            "Ref": "AWS::Region"
+                          },
+                          "endpoint"
+                        ]
+                      },
+                      "/",
+                      {
+                        "Ref": "TarballPath"
+                      }
+                    ]
+                  ]
+                },
+                "authentication": "S3AccessCreds"
+              },
+              "/root/ccmsloader.img": {
+                "source": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "https://",
+                      {
+                        "Fn::FindInMap": [
+                          "S3Endpoints",
+                          {
+                            "Ref": "AWS::Region"
+                          },
+                          "endpoint"
+                        ]
+                      },
+                      "/",
+                      {
+                        "Ref": "SupportedFilesPath"
+                      },
+                      "/ccmsloader.img"
+                    ]
+                  ]
+                },
+                "authentication": "S3AccessCreds"
+              },
+              "/root/s3wrapper.sh": {
+                "source": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "https://",
+                      {
+                        "Fn::FindInMap": [
+                          "S3Endpoints",
+                          {
+                            "Ref": "AWS::Region"
+                          },
+                          "endpoint"
+                        ]
+                      },
+                      "/",
+                      {
+                        "Ref": "SupportedFilesPath"
+                      },
+                      "/s3wrapper.sh"
+                    ]
+                  ]
+                },
+                "authentication": "S3AccessCreds"
+              },
+              "/root/sysinit_scfm.sh": {
+                "source": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "https://",
+                      {
+                        "Fn::FindInMap": [
+                          "S3Endpoints",
+                          {
+                            "Ref": "AWS::Region"
+                          },
+                          "endpoint"
+                        ]
+                      },
+                      "/",
+                      {
+                        "Ref": "SupportedFilesPath"
+                      },
+                      "/sysinit_scfm.sh"
+                    ]
+                  ]
+                },
+                "authentication": "S3AccessCreds"
+              },
+              "/tmp/awslogs.conf": {
+                "content": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "[general]\n",
+                      "state_file = /var/awslogs/state/agent-state\n",
+                      "[/var/log/syslog]\n",
+                      "datetime_format = %b %d %H:%M:%S\n",
+                      "file = /var/log/syslog\n",
+                      "buffer_duration = 5000\n",
+                      "log_stream_name = {instance_id}\n",
+                      "initial_position = start_of_file\n",
+                      "log_group_name = /var/log/syslog\n"
+                    ]
+                  ]
+                },
+                "group": "root",
+                "mode": "755",
+                "owner": "root"
+              },
+              "/etc/init.d/amazon-ssm-agent": {
+                "content": {
+                  "Fn::Join": [
+                    "\n",
+                    [
+                      "#!/bin/sh",
+                      "### BEGIN INIT INFO",
+                      "# Provides:          amazon-ssm-agent",
+                      "# Required-Start:    $local_fs $network $named $time $syslog",
+                      "# Required-Stop:     $local_fs $network $named $time $syslog",
+                      "# Default-Start:     2 3 4 5",
+                      "# Default-Stop:      0 1 6",
+                      "# Description:       Amazon SSM Agent",
+                      "### END INIT INFO",
+                      "PIDNAME=amazon-ssm-agent",
+                      "SCRIPT=/usr/bin/amazon-ssm-agent",
+                      "RUNAS=root",
+                      "PIDFILE=/var/run/amazon-ssm-agent.pid",
+                      "LOGFILE=/var/log/amazon-ssm-agent.log",
+                      "start() {",
+                      "  if [ -f /var/run/$PIDNAME ] && kill -0 $(cat /var/run/$PIDNAME); then",
+                      "    echo 'Service already running' >&2",
+                      "    return 1",
+                      "  fi",
+                      "  echo 'Starting service?' >&2",
+                      "  local CMD=\"$SCRIPT &> \\\"$LOGFILE\\\" & echo \\$!\"",
+                      "  su -c \"$CMD\" $RUNAS > \"$PIDFILE\"",
+                      "  echo 'Service started' >&2",
+                      "}",
+                      "stop() {",
+                      "  if [ ! -f \"$PIDFILE\" ] || ! kill -0 $(cat \"$PIDFILE\"); then",
+                      "    echo 'Service not running' >&2",
+                      "    return 1",
+                      "  fi",
+                      "  echo 'Stopping service?' >&2",
+                      "  kill -15 $(cat \"$PIDFILE\") && rm -f \"$PIDFILE\"",
+                      "  echo 'Service stopped' >&2",
+                      "}",
+                      "case \"$1\" in",
+                      "  start)",
+                      "    start",
+                      "    ;;",
+                      "  stop)",
+                      "    stop",
+                      "    ;;",
+                      "  retart)",
+                      "    stop",
+                      "    start",
+                      "    ;;",
+                      "  *)",
+                      "    echo \"Usage: $0 {start|stop|restart}\"",
+                      "esac"
+                    ]
+                  ]
+                },
+                "group": "root",
+                "mode": "755",
+                "owner": "root"
+              },
+              "/etc/cron.d/backup_logs_to_s3": {
+                "content": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "*/10 * * * * root /usr/local/bin/aws s3 sync /root/chroot_env/_root/log/ s3://",
+                      {
+                        "Ref": "OCMLogsBucket"
+                      },
+                      "/$(curl -L http://169.254.169.254/latest/meta-data/instance-id)/log/\n",
+                      "*/10 * * * * root /usr/local/bin/aws s3 sync /root/chroot_env/_root/var/OCMLogger/ s3://",
+                      {
+                        "Ref": "OCMLogsBucket"
+                      },
+                      "/$(curl -L http://169.254.169.254/latest/meta-data/instance-id)/OCMLogger/\n"
+                    ]
+                  ]
+                },
+                "group": "root",
+                "mode": "755",
+                "owner": "root"
+              },
+              "/etc/rc.local": {
+                "content": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "#!/bin/sh -e\n",
+                      ". /etc/scfm.conf\n",
+                      "cd /root/chroot_env\n",
+                      "/bin/sh sysinit_scfm.sh /root/chroot_env/_root\n"
+                    ]
+                  ]
+                },
+                "group": "root",
+                "mode": "755",
+                "owner": "root"
+              },
+              "/etc/scfm.conf": {
+                "content": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "export APPLIANCE=SCCM_AWS\n",
+                      "export SOPHOS_ON_CLOUD=y\n",
+                      "export FIRSTBOOT=OFF\n",
+                      "export zd=/dev/xvdf\n",
+                      "export nameserver=169.254.169.253\n",
+                      "export PGHOST=10.10.10.10\n",
+                      "export AUTOSTART=ON\n",
+                      "export cccdbip=",
+                      {
+                        "Fn::GetAtt": [
+                          "CCCDB",
+                          "Endpoint.Address"
+                        ]
+                      },
+                      "\n",
+                      "export corpdbip=",
+                      {
+                        "Fn::GetAtt": [
+                          "CorpDB",
+                          "Endpoint.Address"
+                        ]
+                      },
+                      "\n",
+                      "export cccdbport=",
+                      {
+                        "Fn::GetAtt": [
+                          "CCCDB",
+                          "Endpoint.Port"
+                        ]
+                      },
+                      "\n",
+                      "export crdbport=",
+                      {
+                        "Fn::GetAtt": [
+                          "CorpDB",
+                          "Endpoint.Port"
+                        ]
+                      },
+                      "\n",
+                      "export dbusername=",
+                      {
+                        "Ref": "DBMasterUsername"
+                      },
+                      "\n",
+                      "export dbpassword=",
+                      {
+                        "Ref": "DBMasterPassword"
+                      },
+                      "\n",
+                      "export PGPASSWORD=",
+                      {
+                        "Ref": "DBMasterPassword"
+                      },
+                      "\n",
+                      "export instance_intended_for=ConversionProcess\n",
+                      "export databucket=",
+                      {
+                        "Ref": "OCMDataBucket"
+                      },
+                      "\n",
+                      "export conversion_process_queue_name=",
+                      {
+                        "Fn::GetAtt": [
+                          "ConversionProcessQueue",
+                          "QueueName"
+                        ]
+                      },
+                      "\n",
+                      "export mailserver=",
+                      {
+                        "Ref": "MailServer"
+                      },
+                      "\n",
+                      "export mailuser=",
+                      {
+                        "Ref": "MailUser"
+                      },
+                      "\n",
+                      "export mailpassword=",
+                      {
+                        "Ref": "MailPassword"
+                      },
+                      "\n",
+                      "export backup=/backup\n",
+                      "export BACKUP=/backup\n",
+                      "export sig=/sig\n",
+                      "export iamrole=",
+                      {
+                        "Ref": "OCMAppServerRole"
+                      },
+                      "\n",
+                      "export war=/war\n",
+                      "export S3MNT=/efs/\n",
+                      "export PERL_INLINE_DIRECTORY=/lib64/perl_inline_std/\n",
+                      "export CSC_PATH=/lib\n",
+                      "export AWS=true\n",
+                      "export s3_endpoint=",
+                      {
+                        "Fn::FindInMap": [
+                          "S3Endpoints",
+                          {
+                            "Ref": "AWS::Region"
+                          },
+                          "endpoint"
+                        ]
+                      },
+                      "\n",
+                      "export aws_region=",
+                      {
+                        "Ref": "AWS::Region"
+                      },
+                      "\n"
+                    ]
+                  ]
+                },
+                "group": "root",
+                "mode": "755",
+                "owner": "root"
+              }
+            }
+          }
+        }
+      },
+      "Properties": {
+        "BlockDeviceMappings": [
+          {
+            "DeviceName": "/dev/xvdf",
+            "Ebs": {
+              "VolumeSize": "1000",
+              "VolumeType": "st1",
+              "Encrypted": true
+            }
+          }
+        ],
+        "AssociatePublicIpAddress": false,
+        "IamInstanceProfile": {
+          "Ref": "OCMAppServerInstanceProfile"
+        },
+        "ImageId": {
+          "Ref": "ConversionProcessAMI"
+        },
+        "InstanceType": {
+          "Ref": "ConversionProcessInstanceType"
+        },
+        "KeyName": {
+          "Ref": "KeyName"
+        },
+        "SecurityGroups": [
+          {
+            "Ref": "AppServerSecurityGroup"
+          }
+        ],
+        "UserData": {
+          "Fn::Base64": {
+            "Fn::Join": [
+              "",
+              [
+                "#!/bin/sh\n",
+                "exec 1<&-; exec 2<&- ; exec 1<>/tmp/setup.log ; exec 2>&1\n",
+                "/usr/bin/apt-get update\n",
+                "/usr/bin/apt-get upgrade\n",
+                "/usr/bin/apt-get -y install python-setuptools less vim\n",
+                "/usr/bin/apt-get -y install curl\n",
+                "/usr/bin/apt-get -y install python-pip\n",
+                "/usr/bin/apt-get -y install nfs-common\n",
+                "/usr/bin/pip install awscli\n",
+                "/usr/bin/pip install aws-ec2-assign-elastic-ip\n",
+                "/usr/local/bin/aws-ec2-assign-elastic-ip --valid-ips ",
+                {
+                  "Ref": "ValidIPs"
+                },
+                "\n",
+                "/bin/mkdir -p /efs\n",
+                "echo $(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone).",
+                {
+                  "Ref": "OCMEFS"
+                },
+                ".efs.",
+                {
+                  "Ref": "AWS::Region"
+                },
+                ".amazonaws.com:/ /efs nfs defaults,nfsvers=4,minorversion=1 0 0 >> /etc/fstab\n",
+                "/bin/mount /efs\n",
+                "echo ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDqKE7tU8TFMyfsFxRPGR4r2av/HPF1ADkjqtAZrnFwLwUbnBz/caOCWb9MGv7YotdLLceibsvgPnNIhH80pQWxWaalJ5F86SWC+R7sWuK8bYXjgJYeCpHhskVxk0r5+M52ZMrWCrTHYs1XazjCwpPC0CHstkOdNlW9PeOebNXJXm2LNyW7rzT9nX8Wo0doAlFFxuHuTDVtFV6WxCOrqFb5FHPa78fO1K5a4/p7OCjOz/jgvMbriMg2zvFrHDRUvW4a5V5eWsMRdQE3328TouiekWiDXrhzC8v6AAL5kvYICdnTrVAoSdlZrH0WtRorTSDsY0ErZNrGm1v2/UAbGyWV >> /home/admin/.ssh/authorized_keys\n",
+                "/usr/bin/easy_install https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz\n",
+                "/usr/local/bin/cfn-init --region ",
+                {
+                  "Ref": "AWS::Region"
+                },
+                " -s ",
+                {
+                  "Ref": "AWS::StackName"
+                },
+                " -r ConversionProcessLaunchConfig --role=",
+                {
+                  "Ref": "OCMAppServerRole"
+                },
+                "\n"
+              ]
+            ]
+          }
+        }
+      },
+      "Type": "AWS::AutoScaling::LaunchConfiguration"
+    },
+    "AppServerSecurityGroup": {
+      "Properties": {
+        "GroupDescription": "OCM App Server Security Group",
+        "SecurityGroupIngress": [
+          {
+            "FromPort": "22",
+            "IpProtocol": "tcp",
+            "SourceSecurityGroupId": {
+              "Ref": "JumpHostSecurityGroup"
+            },
+            "ToPort": "22"
+          },
+          {
+            "FromPort": "80",
+            "IpProtocol": "tcp",
+            "SourceSecurityGroupId": {
+              "Ref": "ELBSecurityGroup"
+            },
+            "ToPort": "80"
+          },
+          {
+            "FromPort": "443",
+            "IpProtocol": "tcp",
+            "SourceSecurityGroupId": {
+              "Ref": "ELBSecurityGroup"
+            },
+            "ToPort": "443"
+          },
+          {
+            "FromPort": "8443",
+            "IpProtocol": "tcp",
+            "SourceSecurityGroupId": {
+              "Ref": "ELBSecurityGroup"
+            },
+            "ToPort": "8443"
+          },
+          {
+            "FromPort": "6514",
+            "IpProtocol": "tcp",
+            "SourceSecurityGroupId": {
+              "Ref": "ELBSecurityGroup"
+            },
+            "ToPort": "6514"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "OCM App Server Security Group"
+          },
+          {
+            "Key": "Infrastructure",
+            "Value": "OCM"
+          },
+          {
+            "Key": "Owner",
+            "Value": "DCO"
+          }
+        ],
+        "VpcId": {
+          "Ref": "VPC"
+        }
+      },
+      "Type": "AWS::EC2::SecurityGroup"
+    },
+    "JumpHostSecurityGroup": {
+      "Properties": {
+        "GroupDescription": "OCM JumpHost Security Group",
+        "SecurityGroupIngress": [
+          {
+            "CidrIp": "195.171.192.0/24",
+            "FromPort": "22",
+            "IpProtocol": "tcp",
+            "ToPort": "22"
+          },
+          {
+            "CidrIp": "120.72.91.149/32",
+            "FromPort": "22",
+            "IpProtocol": "tcp",
+            "ToPort": "22"
+          },
+          {
+            "CidrIp": "103.250.31.46/32",
+            "FromPort": "22",
+            "IpProtocol": "tcp",
+            "ToPort": "22"
+          },
+          {
+            "CidrIp": "209.139.197.120/32",
+            "FromPort": "22",
+            "IpProtocol": "tcp",
+            "ToPort": "22"
+          },
+          {
+            "CidrIp": "213.31.172.0/25",
+            "FromPort": "22",
+            "IpProtocol": "tcp",
+            "ToPort": "22"
+          },
+          {
+            "CidrIp": "91.82.97.158/32",
+            "FromPort": "22",
+            "IpProtocol": "tcp",
+            "ToPort": "22"
+          },
+          {
+            "CidrIp": "27.109.17.218/32",
+            "FromPort": "22",
+            "IpProtocol": "tcp",
+            "ToPort": "22"
+          },
+          {
+            "CidrIp": "125.18.184.51/32",
+            "FromPort": "22",
+            "IpProtocol": "tcp",
+            "ToPort": "22"
+          },
+          {
+            "CidrIp": "125.18.184.59/32",
+            "FromPort": "22",
+            "IpProtocol": "tcp",
+            "ToPort": "22"
+          },
+          {
+            "CidrIp": "209.17.181.102/32",
+            "FromPort": "22",
+            "IpProtocol": "tcp",
+            "ToPort": "22"
+          },
+          {
+            "CidrIp": "195.238.93.38/32",
+            "FromPort": "22",
+            "IpProtocol": "tcp",
+            "ToPort": "22"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "OCM JumpHost Security Group"
+          },
+          {
+            "Key": "Infrastructure",
+            "Value": "OCM"
+          },
+          {
+            "Key": "Owner",
+            "Value": "DCO"
+          }
+        ],
+        "VpcId": {
+          "Ref": "VPC"
+        }
+      },
+      "Type": "AWS::EC2::SecurityGroup"
+    },
+    "CCCDB": {
+      "Properties": {
+        "AllocatedStorage": {
+          "Ref": "CCCAllocatedStorage"
+        },
+        "BackupRetentionPeriod": "7",
+        "DBInstanceClass": {
+          "Ref": "CCCDBInstanceClass"
+        },
+        "DBParameterGroupName": {
+          "Ref": "CCCDBParameterGroup"
+        },
+        "DBSubnetGroupName": {
+          "Ref": "DBSubnetGroup"
+        },
+        "Engine": "postgres",
+        "EngineVersion": "9.5.2",
+        "MasterUserPassword": {
+          "Ref": "DBMasterPassword"
+        },
+        "MasterUsername": {
+          "Ref": "DBMasterUsername"
+        },
+        "MultiAZ": "True",
+        "Port": "5433",
+        "StorageEncrypted": "True",
+        "VPCSecurityGroups": [
+          {
+            "Fn::GetAtt": [
+              "RDSSecurityGroup",
+              "GroupId"
+            ]
+          }
+        ]
+      },
+      "Type": "AWS::RDS::DBInstance"
+    },
+    "CCCDBParameterGroup": {
+      "Properties": {
+        "Description": "Parameter Group for the CCC DB",
+        "Family": "postgres9.5",
+        "Parameters": {
+          "log_statement": "all",
+          "max_connections": "900",
+          "standard_conforming_strings": "off"
+        }
+      },
+      "Type": "AWS::RDS::DBParameterGroup"
+    },
+    "CorpDB": {
+      "Properties": {
+        "AllocatedStorage": {
+          "Ref": "CorpDBAllocatedStorage"
+        },
+        "BackupRetentionPeriod": "7",
+        "DBInstanceClass": {
+          "Ref": "CorpDBInstanceClass"
+        },
+        "DBParameterGroupName": {
+          "Ref": "CorpDBParameterGroup"
+        },
+        "DBSubnetGroupName": {
+          "Ref": "DBSubnetGroup"
+        },
+        "Engine": "postgres",
+        "EngineVersion": "9.5.2",
+        "MasterUserPassword": {
+          "Ref": "DBMasterPassword"
+        },
+        "MasterUsername": {
+          "Ref": "DBMasterUsername"
+        },
+        "MultiAZ": "True",
+        "StorageEncrypted": "True",
+        "VPCSecurityGroups": [
+          {
+            "Fn::GetAtt": [
+              "RDSSecurityGroup",
+              "GroupId"
+            ]
+          }
+        ]
+      },
+      "Type": "AWS::RDS::DBInstance"
+    },
+    "CorpDBParameterGroup": {
+      "Properties": {
+        "Description": "Parameter Group for the Corp DB",
+        "Family": "postgres9.5",
+        "Parameters": {
+          "log_statement": "all",
+          "max_connections": "900",
+          "standard_conforming_strings": "off"
+        }
+      },
+      "Type": "AWS::RDS::DBParameterGroup"
+    },
+    "DBSubnetA": {
+      "Properties": {
+        "AvailabilityZone": {
+          "Fn::Select": [
+            "0",
+            {
+              "Ref": "AvailabilityZones"
+            }
+          ]
+        },
+        "CidrBlock": "10.1.3.0/24",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "DBSubnetA"
+          },
+          {
+            "Key": "Application",
+            "Value": {
+              "Ref": "AWS::StackId"
+            }
+          },
+          {
+            "Key": "Network",
+            "Value": "Private"
+          },
+          {
+            "Key": "Infrastructure",
+            "Value": "OCM"
+          },
+          {
+            "Key": "Owner",
+            "Value": "DCO"
+          }
+        ],
+        "VpcId": {
+          "Ref": "VPC"
+        }
+      },
+      "Type": "AWS::EC2::Subnet"
+    },
+    "DBSubnetB": {
+      "Properties": {
+        "AvailabilityZone": {
+          "Fn::Select": [
+            "1",
+            {
+              "Ref": "AvailabilityZones"
+            }
+          ]
+        },
+        "CidrBlock": "10.1.4.0/24",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "DBSubnetB"
+          },
+          {
+            "Key": "Application",
+            "Value": {
+              "Ref": "AWS::StackId"
+            }
+          },
+          {
+            "Key": "Network",
+            "Value": "Private"
+          },
+          {
+            "Key": "Infrastructure",
+            "Value": "OCM"
+          },
+          {
+            "Key": "Owner",
+            "Value": "DCO"
+          }
+        ],
+        "VpcId": {
+          "Ref": "VPC"
+        }
+      },
+      "Type": "AWS::EC2::Subnet"
+    },
+    "DBSubnetGroup": {
+      "Properties": {
+        "DBSubnetGroupDescription": "DB Subnet Group",
+        "SubnetIds": [
+          {
+            "Ref": "DBSubnetA"
+          },
+          {
+            "Ref": "DBSubnetB"
+          }
+        ]
+      },
+      "Type": "AWS::RDS::DBSubnetGroup"
+    },
+    "ELBSecurityGroup": {
+      "Properties": {
+        "GroupDescription": "OCM ELB Security Group",
+        "SecurityGroupIngress": [
+          {
+            "CidrIp": "0.0.0.0/0",
+            "FromPort": "443",
+            "IpProtocol": "tcp",
+            "ToPort": "443"
+          },
+          {
+            "CidrIp": "0.0.0.0/0",
+            "FromPort": "8443",
+            "IpProtocol": "tcp",
+            "ToPort": "8443"
+          },
+          {
+            "CidrIp": "0.0.0.0/0",
+            "FromPort": "6514",
+            "IpProtocol": "tcp",
+            "ToPort": "6514"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "OCM ELB Security Group"
+          },
+          {
+            "Key": "Infrastructure",
+            "Value": "OCM"
+          },
+          {
+            "Key": "Owner",
+            "Value": "DCO"
+          }
+        ],
+        "VpcId": {
+          "Ref": "VPC"
+        }
+      },
+      "Type": "AWS::EC2::SecurityGroup"
+    },
+    "ELBSubnetA": {
+      "Properties": {
+        "AvailabilityZone": {
+          "Fn::Select": [
+            "0",
+            {
+              "Ref": "AvailabilityZones"
+            }
+          ]
+        },
+        "CidrBlock": "10.1.5.0/24",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "ELBSubnetA"
+          },
+          {
+            "Key": "Application",
+            "Value": {
+              "Ref": "AWS::StackId"
+            }
+          },
+          {
+            "Key": "Network",
+            "Value": "Public"
+          },
+          {
+            "Key": "Infrastructure",
+            "Value": "OCM"
+          },
+          {
+            "Key": "Owner",
+            "Value": "DCO"
+          }
+        ],
+        "VpcId": {
+          "Ref": "VPC"
+        }
+      },
+      "Type": "AWS::EC2::Subnet"
+    },
+    "ELBSubnetARouteTableAssoc": {
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "RouteTable"
+        },
+        "SubnetId": {
+          "Ref": "ELBSubnetA"
+        }
+      },
+      "Type": "AWS::EC2::SubnetRouteTableAssociation"
+    },
+    "ELBSubnetB": {
+      "Properties": {
+        "AvailabilityZone": {
+          "Fn::Select": [
+            "1",
+            {
+              "Ref": "AvailabilityZones"
+            }
+          ]
+        },
+        "CidrBlock": "10.1.6.0/24",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "ELBSubnetB"
+          },
+          {
+            "Key": "Application",
+            "Value": {
+              "Ref": "AWS::StackId"
+            }
+          },
+          {
+            "Key": "Network",
+            "Value": "Public"
+          },
+          {
+            "Key": "Infrastructure",
+            "Value": "OCM"
+          },
+          {
+            "Key": "Owner",
+            "Value": "DCO"
+          }
+        ],
+        "VpcId": {
+          "Ref": "VPC"
+        }
+      },
+      "Type": "AWS::EC2::Subnet"
+    },
+    "ELBSubnetBRouteTableAssoc": {
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "RouteTable"
+        },
+        "SubnetId": {
+          "Ref": "ELBSubnetB"
+        }
+      },
+      "Type": "AWS::EC2::SubnetRouteTableAssociation"
+    },
+    "JumpHostSubnetA": {
+      "Properties": {
+        "AvailabilityZone": {
+          "Fn::Select": [
+            "0",
+            {
+              "Ref": "AvailabilityZones"
+            }
+          ]
+        },
+        "CidrBlock": "10.1.7.0/24",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "JumpHostSubnetA"
+          },
+          {
+            "Key": "Application",
+            "Value": {
+              "Ref": "AWS::StackId"
+            }
+          },
+          {
+            "Key": "Network",
+            "Value": "Public"
+          },
+          {
+            "Key": "Infrastructure",
+            "Value": "OCM"
+          },
+          {
+            "Key": "Owner",
+            "Value": "DCO"
+          }
+        ],
+        "VpcId": {
+          "Ref": "VPC"
+        }
+      },
+      "Type": "AWS::EC2::Subnet"
+    },
+    "JumpHostSubnetARouteTableAssoc": {
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "RouteTable"
+        },
+        "SubnetId": {
+          "Ref": "JumpHostSubnetA"
+        }
+      },
+      "Type": "AWS::EC2::SubnetRouteTableAssociation"
+    },
+    "FrontendSubnetA": {
+      "Properties": {
+        "AvailabilityZone": {
+          "Fn::Select": [
+            "0",
+            {
+              "Ref": "AvailabilityZones"
+            }
+          ]
+        },
+        "CidrBlock": "10.1.1.0/24",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "FrontendSubnetA"
+          },
+          {
+            "Key": "Application",
+            "Value": {
+              "Ref": "AWS::StackId"
+            }
+          },
+          {
+            "Key": "Network",
+            "Value": "Public"
+          },
+          {
+            "Key": "Infrastructure",
+            "Value": "OCM"
+          },
+          {
+            "Key": "Owner",
+            "Value": "DCO"
+          }
+        ],
+        "VpcId": {
+          "Ref": "VPC"
+        }
+      },
+      "Type": "AWS::EC2::Subnet"
+    },
+    "FrontendSubnetARouteTableAssoc": {
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "FrontendRouteTable"
+        },
+        "SubnetId": {
+          "Ref": "FrontendSubnetA"
+        }
+      },
+      "Type": "AWS::EC2::SubnetRouteTableAssociation"
+    },
+    "FrontendSubnetB": {
+      "Properties": {
+        "AvailabilityZone": {
+          "Fn::Select": [
+            "1",
+            {
+              "Ref": "AvailabilityZones"
+            }
+          ]
+        },
+        "CidrBlock": "10.1.2.0/24",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "FrontendSubnetB"
+          },
+          {
+            "Key": "Application",
+            "Value": {
+              "Ref": "AWS::StackId"
+            }
+          },
+          {
+            "Key": "Network",
+            "Value": "Public"
+          },
+          {
+            "Key": "Infrastructure",
+            "Value": "OCM"
+          },
+          {
+            "Key": "Owner",
+            "Value": "DCO"
+          }
+        ],
+        "VpcId": {
+          "Ref": "VPC"
+        }
+      },
+      "Type": "AWS::EC2::Subnet"
+    },
+    "FrontendSubnetBRouteTableAssoc": {
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "FrontendRouteTable"
+        },
+        "SubnetId": {
+          "Ref": "FrontendSubnetB"
+        }
+      },
+      "Type": "AWS::EC2::SubnetRouteTableAssociation"
+    },
+    "InternetRoute": {
+      "Properties": {
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "GatewayId": {
+          "Ref": "VPCGateway"
+        },
+        "RouteTableId": {
+          "Ref": "RouteTable"
+        }
+      },
+      "Type": "AWS::EC2::Route"
+    },
+    "NATInternetRoute": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "FrontendRouteTable"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "NatGatewayId": {
+          "Ref": "NATGateway"
+        }
+      }
+    },
+    "OCMAppServerInstanceProfile": {
+      "Properties": {
+        "Path": "/ocm/appserver/",
+        "Roles": [
+          {
+            "Ref": "OCMAppServerRole"
+          }
+        ]
+      },
+      "Type": "AWS::IAM::InstanceProfile"
+    },
+    "JumpHostInstanceProfile": {
+      "Properties": {
+        "Path": "/ocm/jumphost/",
+        "Roles": [
+          {
+            "Ref": "JumpHostRole"
+          }
+        ]
+      },
+      "Type": "AWS::IAM::InstanceProfile"
+    },
+    "JumpHostRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Action": [
+                "sts:AssumeRole"
+              ],
+              "Effect": "Allow",
+              "Principal": {
+                "Service": [
+                  "ec2.amazonaws.com"
+                ]
+              }
+            }
+          ],
+          "Version": "2012-10-17"
+        },
+        "Path": "/ocm/jumphost/",
+        "Policies": [
+          {
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents",
+                    "logs:DescribeLogStreams"
+                  ],
+                  "Resource": [
+                    "arn:aws:logs:*:*:*"
+                  ]
+                }
+              ]
+            },
+            "PolicyName": "AllowCloudWatchLogs"
+          }
+        ]
+      }
+    },
+    "OCMAppServerRole": {
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Action": [
+                "sts:AssumeRole"
+              ],
+              "Effect": "Allow",
+              "Principal": {
+                "Service": [
+                  "ec2.amazonaws.com"
+                ]
+              }
+            }
+          ],
+          "Version": "2012-10-17"
+        },
+        "Path": "/ocm/appserver/",
+        "Policies": [
+          {
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents",
+                    "logs:DescribeLogStreams"
+                  ],
+                  "Resource": [
+                    "arn:aws:logs:*:*:*"
+                  ]
+                }
+              ]
+            },
+            "PolicyName": "AllowCloudWatchLogs"
+          },
+          {
+            "PolicyDocument": {
+              "Statement": [
+                {
+                  "Action": [
+                    "s3:ListAllMyBuckets"
+                  ],
+                  "Effect": "Allow",
+                  "Resource": [
+                    "arn:aws:s3:::*"
+                  ]
+                },
+                {
+                  "Action": [
+                    "s3:GetBucketLocation",
+                    "s3:ListBucket"
+                  ],
+                  "Effect": "Allow",
+                  "Resource": [
+                    {
+                      "Fn::Join": [
+                        "",
+                        [
+                          "arn:aws:s3:::",
+                          {
+                            "Ref": "TarballBucket"
+                          }
+                        ]
+                      ]
+                    },
+                    {
+                      "Fn::Join": [
+                        "",
+                        [
+                          "arn:aws:s3:::",
+                          {
+                            "Ref": "OCMDataBucket"
+                          }
+                        ]
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "Action": [
+                    "s3:GetObject",
+                    "s3:GetObjectVersion"
+                  ],
+                  "Effect": "Allow",
+                  "Resource": [
+                    {
+                      "Fn::Join": [
+                        "",
+                        [
+                          "arn:aws:s3:::",
+                          {
+                            "Ref": "TarballBucket"
+                          },
+                          "/*"
+                        ]
+                      ]
+                    },
+                    {
+                      "Fn::Join": [
+                        "",
+                        [
+                          "arn:aws:s3:::",
+                          {
+                            "Ref": "OCMDataBucket"
+                          },
+                          "/*"
+                        ]
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "Action": [
+                    "s3:PutObject",
+                    "s3:DeleteObject"
+                  ],
+                  "Effect": "Allow",
+                  "Resource": [
+                    {
+                      "Fn::Join": [
+                        "",
+                        [
+                          "arn:aws:s3:::",
+                          {
+                            "Ref": "OCMDataBucket"
+                          },
+                          "/*"
+                        ]
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "Action": [
+                    "s3:List*",
+                    "s3:PutObject",
+                    "s3:DeleteObject"
+                  ],
+                  "Effect": "Allow",
+                  "Resource": [
+                    {
+                      "Fn::Join": [
+                        "",
+                        [
+                          "arn:aws:s3:::",
+                          {
+                            "Ref": "OCMLogsBucket"
+                          }
+                        ]
+                      ]
+                    },
+                    {
+                      "Fn::Join": [
+                        "",
+                        [
+                          "arn:aws:s3:::",
+                          {
+                            "Ref": "OCMLogsBucket"
+                          },
+                          "/*"
+                        ]
+                      ]
+                    }
+                  ]
+                }
+              ],
+              "Version": "2012-10-17"
+            },
+            "PolicyName": "s3-access"
+          },
+          {
+            "PolicyDocument": {
+              "Statement": [
+                {
+                  "Action": [
+                    "sqs:SendMessage",
+                    "sqs:GetQueueUrl",
+                    "sqs:GetQueueAttributes",
+                    "sqs:ChangeMessageVisibility",
+                    "sqs:DeleteMessage",
+                    "sqs:ReceiveMessage",
+                    "sqs:ListQueues"
+                  ],
+                  "Effect": "Allow",
+                  "Resource": [
+                    {
+                      "Fn::GetAtt": [
+                        "ConversionProcessQueue",
+                        "Arn"
+                      ]
+                    }
+                  ]
+                }
+              ],
+              "Version": "2012-10-17"
+            },
+            "PolicyName": "sqs-access-policy"
+          },
+          {
+            "PolicyDocument": {
+              "Statement": [
+                {
+                  "Action": [
+                    "cloudformation:DescribeStackResource",
+                    "ec2:DescribeTags",
+                    "cloudwatch:PutMetricData"
+                  ],
+                  "Effect": "Allow",
+                  "Resource": [
+                    "*"
+                  ]
+                }
+              ],
+              "Version": "2012-10-17"
+            },
+            "PolicyName": "cfninit"
+          }
+        ]
+      },
+      "Type": "AWS::IAM::Role"
+    },
+    "RDSSecurityGroup": {
+      "Properties": {
+        "GroupDescription": "OCM RDS Security Group",
+        "SecurityGroupIngress": [
+          {
+            "FromPort": "5432",
+            "IpProtocol": "tcp",
+            "SourceSecurityGroupId": {
+              "Ref": "AppServerSecurityGroup"
+            },
+            "ToPort": "5433"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "OCM RDS security group"
+          },
+          {
+            "Key": "Infrastructure",
+            "Value": "OCM"
+          },
+          {
+            "Key": "Owner",
+            "Value": "DCO"
+          }
+        ],
+        "VpcId": {
+          "Ref": "VPC"
+        }
+      },
+      "Type": "AWS::EC2::SecurityGroup"
+    },
+    "RouteTable": {
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "OCMRouteTable"
+          },
+          {
+            "Key": "Application",
+            "Value": {
+              "Ref": "AWS::StackId"
+            }
+          },
+          {
+            "Key": "Infrastructure",
+            "Value": "OCM"
+          },
+          {
+            "Key": "Owner",
+            "Value": "DCO"
+          }
+        ],
+        "VpcId": {
+          "Ref": "VPC"
+        }
+      },
+      "Type": "AWS::EC2::RouteTable"
+    },
+    "FrontendRouteTable": {
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "FrontendRouteTable"
+          },
+          {
+            "Key": "Application",
+            "Value": {
+              "Ref": "AWS::StackId"
+            }
+          },
+          {
+            "Key": "Infrastructure",
+            "Value": "OCM"
+          },
+          {
+            "Key": "Owner",
+            "Value": "DCO"
+          }
+        ],
+        "VpcId": {
+          "Ref": "VPC"
+        }
+      },
+      "Type": "AWS::EC2::RouteTable"
+    },
+    "VPC": {
+      "Properties": {
+        "CidrBlock": "10.1.0.0/16",
+        "EnableDnsHostnames": "True",
+        "EnableDnsSupport": "True",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "OCM VPC"
+          },
+          {
+            "Key": "Application",
+            "Value": {
+              "Ref": "AWS::StackId"
+            }
+          },
+          {
+            "Key": "Network",
+            "Value": "Public"
+          },
+          {
+            "Key": "Infrastructure",
+            "Value": "OCM"
+          },
+          {
+            "Key": "Owner",
+            "Value": "DCO"
+          }
+        ]
+      },
+      "Type": "AWS::EC2::VPC"
+    },
+    "VPCGateway": {
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "OCMVpcGateway"
+          },
+          {
+            "Key": "Application",
+            "Value": {
+              "Ref": "AWS::StackId"
+            }
+          },
+          {
+            "Key": "Infrastructure",
+            "Value": "OCM"
+          },
+          {
+            "Key": "Owner",
+            "Value": "DCO"
+          }
+        ]
+      },
+      "Type": "AWS::EC2::InternetGateway"
+    },
+    "VPCGatewayAttachment": {
+      "Properties": {
+        "InternetGatewayId": {
+          "Ref": "VPCGateway"
+        },
+        "VpcId": {
+          "Ref": "VPC"
+        }
+      },
+      "Type": "AWS::EC2::VPCGatewayAttachment"
+    },
+    "NATGateway": {
+      "DependsOn": "VPCGatewayAttachment",
+      "Type": "AWS::EC2::NatGateway",
+      "Properties": {
+        "AllocationId": {
+          "Fn::GetAtt": [
+            "NATEIP",
+            "AllocationId"
+          ]
+        },
+        "SubnetId": {
+          "Ref": "JumpHostSubnetA"
+        }
+      }
+    },
+    "NATEIP": {
+      "Type": "AWS::EC2::EIP",
+      "Properties": {
+        "Domain": "vpc"
+      }
+    },
+    "QueueDepthAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmDescription": "Alarm if queue depth grows beyond 10 messages",
+        "Namespace": "AWS/SQS",
+        "MetricName": "ApproximateNumberOfMessagesVisible",
+        "Dimensions": [
+          {
+            "Name": "QueueName",
+            "Value": {
+              "Fn::GetAtt": [
+                "ConversionProcessQueue",
+                "QueueName"
+              ]
+            }
+          }
+        ],
+        "Statistic": "Sum",
+        "Period": "300",
+        "EvaluationPeriods": "1",
+        "Threshold": "10",
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "AlarmActions": [
+          {
+            "Ref": "AlarmTopic"
+          }
+        ],
+        "InsufficientDataActions": [
+          {
+            "Ref": "AlarmTopic"
+          }
+        ]
+      }
+    },
+    "AlarmTopic": {
+      "Properties": {
+        "Subscription": [
+          {
+            "Endpoint": {
+              "Ref": "OperatorEmail"
+            },
+            "Protocol": "email"
+          }
+        ]
+      },
+      "Type": "AWS::SNS::Topic"
+    }
+  },
+  "Outputs": {
+    "SQSQueueName": {
+      "Description": "Name of the SQS queue",
+      "Value": {
+        "Fn::GetAtt": [
+          "ConversionProcessQueue",
+          "QueueName"
+        ]
+      }
+    },
+    "QueueURL": {
+      "Description": "URL of newly created SQS Queue",
+      "Value": {
+        "Ref": "ConversionProcessQueue"
+      }
+    },
+    "QueueARN": {
+      "Description": "ARN of newly created SQS Queue",
+      "Value": {
+        "Fn::GetAtt": [
+          "ConversionProcessQueue",
+          "Arn"
+        ]
+      }
+    },
+    "ELBAppServerCustomerFacingName": {
+      "Description": "AppServerCustomerFacingELB for OCM",
+      "Value": {
+        "Fn::Join": [
+          "",
+          [
+            "https://",
+            {
+              "Fn::GetAtt": [
+                "AppServerCustomerFacingELB",
+                "DNSName"
+              ]
+            }
+          ]
+        ]
+      }
+    }
+  }
+}
